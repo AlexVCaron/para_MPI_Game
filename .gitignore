@@ -1,3 +1,11 @@
+
+vs_projs/*
+archives/
+*.log
+
+
+### TEMPLATE GITHUB .IGNORE ###
+
 # Prerequisites
 *.d
 
