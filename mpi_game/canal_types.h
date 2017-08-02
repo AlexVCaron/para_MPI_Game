@@ -23,6 +23,7 @@ struct canal_traits
     typedef typename c_tag::direction direction;
 
     typedef typename c_tag::canal_impl impl_type;
+    using context_type = typename impl_type::context_type;
     typedef typename impl_type::message_type message_type;
 };
 

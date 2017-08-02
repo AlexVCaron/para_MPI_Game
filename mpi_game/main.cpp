@@ -4,28 +4,27 @@
 #include <iostream>
 #include <algorithm>
 #include "connecteur.h"
+#include "mpi_broadcaster_driver.h"
+
 
 using namespace std;
 
-template<class T>
-struct BC_boboche
-{
-    typedef canal_direction::_bi direction;
-    typedef T message_type;
-    T bf = 'c';
-    T resolve() const { return bf; }
-    void resolve(T& t) { bf = t; }
-};
+template<MPI_Datatype mpi_datatype>
+using mpi_connector = connecteur<canal_juge<mpi_broadcaster_driver::broadcaster_type<mpi_datatype>>>;
 
 int main()
 {
-    using boboche = connecteur<canal_juge<BC_boboche<char>>>;
     char c;
-    boboche bb{}; bb.request<canal_direction::_receive>();
+    mpi_connector<MPI_CHAR> connector{ };
+    auto init_context(mpi_broadcaster_driver::make_mpi_context(
+            0, 0, MPI_COMM_WORLD
+        ));
 
-    cout << bb.queue.size() << endl;
+    connector.request<canal_direction::_receive>(init_context);
+
+    cout << connector.queue.size() << endl;
    
-    for_each(bb.queue.begin(), bb.queue.end(), [](char elem)
+    for_each(connector.queue.begin(), connector.queue.end(), [](char elem)
     {
         cout << "elem : " << elem << endl;
     });
