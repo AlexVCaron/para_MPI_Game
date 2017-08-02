@@ -4,19 +4,19 @@
 #include <iostream>
 #include <algorithm>
 #include "connecteur.h"
-#include "mpi_broadcaster_driver.h"
+#include "mpi_driver.h"
 
 
 using namespace std;
 
 template<MPI_Datatype mpi_datatype>
-using mpi_connector = connecteur<canal_juge<mpi_broadcaster_driver::broadcaster_type<mpi_datatype>>>;
+using mpi_connector = connecteur<canal_juge<mpi_driver::broadcaster_type<mpi_datatype>>>;
 
 int main()
 {
     char c;
     mpi_connector<MPI_CHAR> connector{ };
-    auto init_context(mpi_broadcaster_driver::make_mpi_context(
+    auto init_context(mpi_driver::make_mpi_context(
             0, 0, MPI_COMM_WORLD
         ));
 
