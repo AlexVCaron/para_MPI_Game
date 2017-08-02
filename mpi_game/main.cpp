@@ -9,25 +9,11 @@
 
 using namespace std;
 
-template<MPI_Datatype mpi_datatype>
-using mpi_connector = connecteur<canal_juge<mpi_driver::broadcaster_type<mpi_datatype>>>;
+
 
 int main()
 {
     char c;
-    mpi_connector<MPI_CHAR> connector{ };
-    auto init_context(mpi_driver::make_mpi_context(
-            0, 0, MPI_COMM_WORLD
-        ));
-
-    connector.request<canal_direction::_receive>(init_context);
-
-    cout << connector.queue.size() << endl;
-   
-    for_each(connector.queue.begin(), connector.queue.end(), [](char elem)
-    {
-        cout << "elem : " << elem << endl;
-    });
     cin >> c;
     return 0;
 }

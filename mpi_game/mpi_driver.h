@@ -5,6 +5,11 @@
 
 namespace mpi_driver
 {
+    template<int B>
+    struct root_rank { static const bool value = false; };
+
+    template<>
+    struct root_rank<1> { static const bool value = true; };
 
     template<MPI_Datatype mpi_datatype>
     struct mpi_types
@@ -59,6 +64,23 @@ namespace mpi_driver
         static broadcaster_mpi<mpi_datatype> make_broadcaster()
         {
             return broadcaster_mpi<mpi_datatype>{};
+        }
+    };
+
+    template<MPI_Datatype mpi_datatype>
+    struct master_broadcaster_mpi : broadcaster_mpi<mpi_datatype>
+    {
+        using direction = canal_direction::_bi_all;
+        using message_type = typename mpi_types<mpi_datatype>::serialization;
+
+        MPI_Datatype datatype = mpi_datatype;
+
+        template<class mpi_context_type>
+        void resolveAll(message_type message, mpi_context_type& context)
+        {
+            message_type buff;
+            MPI_Bcast(&buff, context.count, datatype, context.target, context.comm);
+            return buff;
         }
     };
 

@@ -29,9 +29,12 @@ struct canal_traits
 
 struct canal_direction
 {
-    typedef struct direction_in {} _send;
-    typedef struct direction_out {} _receive;
+    typedef struct direction_out {} _send;
+    typedef struct direction_in {} _receive;
     typedef struct direction_bi {} _bi;
+    typedef struct direction_global_out {} _send_all;
+    typedef struct direction_global_in {} _receive_all;
+    typedef struct direction_global_bi {} _bi_all;
 };
 
 #endif

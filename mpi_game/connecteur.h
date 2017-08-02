@@ -31,6 +31,17 @@ private:
     {
         broadcaster_traits<impl>::make_broadcaster().resolve(args ...);
     }
+
+    template<class ... Args>
+    void request(canal_direction::_receive_all, Args&& ... args)
+    {
+        queue.push_back(broadcaster_traits<impl>::make_broadcaster().resolveAll(args ...));
+    }
+    template<class ... Args>
+    void request(canal_direction::_send_all, Args&& ... args)
+    {
+        broadcaster_traits<impl>::make_broadcaster().resolveAll(args ...);
+    }
 };
 
 #endif
