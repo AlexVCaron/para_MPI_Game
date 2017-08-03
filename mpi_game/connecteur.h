@@ -2,7 +2,6 @@
 #define CONNECTEUR_H
 #include "canal.h"
 #include <deque>
-#include "broadcaster_traits.h"
 
 template<class canal_type>
 struct connecteur
@@ -24,23 +23,23 @@ private:
     template<class ... Args>
     void request(canal_direction::_receive, Args&& ... args)
     {
-        queue.push_back(broadcaster_traits<impl>::make_broadcaster().resolve(args ...));
+        queue.push_back(impl().resolve(args ...));
     }
     template<class ... Args>
     void request(canal_direction::_send, Args&& ... args)
     {
-        broadcaster_traits<impl>::make_broadcaster().resolve(args ...);
+        impl().resolve(args ...);
     }
 
     template<class ... Args>
     void request(canal_direction::_receive_all, Args&& ... args)
     {
-        queue.push_back(broadcaster_traits<impl>::make_broadcaster().resolveAll(args ...));
+        queue.push_back(impl().resolveAll(args ...));
     }
     template<class ... Args>
     void request(canal_direction::_send_all, Args&& ... args)
     {
-        broadcaster_traits<impl>::make_broadcaster().resolveAll(args ...);
+        queue.push_back(impl().resolveAll(args ...));
     }
 };
 
