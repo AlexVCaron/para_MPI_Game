@@ -3,6 +3,7 @@
 
 #include "mpi.h"
 #include "function_traits.h"
+#include <vector>
 
 namespace mpi_driver
 {
@@ -28,6 +29,7 @@ namespace mpi_driver
         using context_type = mpi_context;
         using direction = canal_direction::_bi;
         using message_type = mess_type;
+        using request_type = MPI_Request;
 
         template<class mpi_context_type>
         message_type resolve(mpi_context_type& context)
@@ -37,8 +39,8 @@ namespace mpi_driver
             return buff;
         }
 
-        template<class mpi_context_type>
-        void resolve(message_type message, mpi_context_type& context)
+        template<class mpi_context_type, class m_type>
+        void resolve(m_type message, mpi_context_type& context)
         {
             MPI_Send(&message, context.count, context.datatype, context.target, context.tag, context.comm);
         }
@@ -66,7 +68,6 @@ namespace mpi_driver
         }
     };
 
-
     inline mpi_context make_mpi_context(int target, int tag, MPI_Comm comm, MPI_Datatype datatype)
     {
         mpi_context ct;
@@ -75,6 +76,65 @@ namespace mpi_driver
         ct.comm = comm;
         ct.datatype = datatype;
         return std::forward<mpi_context>(ct);
+    }
+
+    struct mpi_variables
+    {
+        int count = 0;
+        std::vector<int> blocks;
+        std::vector<MPI_Datatype> types;
+        std::vector<MPI_Aint> displacements;
+        mpi_variables() : blocks(size_t(0)), types(size_t(0)), displacements(size_t(0)) {}
+        mpi_variables(mpi_variables& oth)
+        {
+            count = oth.count;
+            blocks = oth.blocks;
+            types = oth.types;
+            displacements = oth.displacements;
+        }
+    };
+
+    template<class ... Args>
+    MPI_Datatype createCustomDatatype(std::vector<int>::iterator& counts, Args&& ... t)
+    {
+        MPI_Datatype obj_type;
+        mpi_variables mpi_vars;
+
+        createCustomDatatype(mpi_vars, counts, t ...);
+
+        MPI_Type_create_struct(mpi_vars.count, &(*mpi_vars.blocks.begin()), &(*mpi_vars.displacements.begin()), &(*mpi_vars.types.begin()), &obj_type);
+        MPI_Type_commit(const_cast<MPI_Datatype*>(&obj_type));
+
+        return obj_type;
+    }
+
+    template<class arg, class ... Args>
+    void createCustomDatatype(mpi_variables& mpi_vars, std::vector<int>::iterator& counts, arg a, Args&& ... t)
+    {
+        createCustomDatatype(mpi_vars, counts, std::forward<arg>(a));
+        ++counts;
+        createCustomDatatype(mpi_vars, counts, t ...);
+    }
+
+    template<class arg>
+    void createCustomDatatype(mpi_variables& mpi_vars, std::vector<int>::iterator& count, arg a)
+    {
+        mpi_vars.count += 1;
+        int b = *count;
+        mpi_vars.blocks.push_back(b);
+        mpi_vars.types.push_back(a);
+
+        MPI_Aint intex, intlb;
+        MPI_Type_get_extent(a, &intlb, &intex);
+
+        if (mpi_vars.count == 1)
+        {
+            mpi_vars.displacements.push_back(static_cast<MPI_Aint>(0));
+        }
+        else
+        {
+            mpi_vars.displacements.push_back(mpi_vars.displacements.back() + intex);
+        }
     }
 
     template<class message_type>

@@ -7,6 +7,8 @@
 #include "connecteur.h"
 #include <vector>
 #include <iostream>
+#include <string>
+#include <forward_list>
 
 namespace mpi_interface
 {
@@ -56,34 +58,17 @@ namespace mpi_interface
         int canal_carte_tag = 1;
         int actor_rank = -1;
     };
-    struct mpi_variables
-    {
-        int count;
-        std::vector<int> blocks;
-        std::vector<MPI_Datatype> types;
-        std::vector<MPI_Aint> displacements;
-    };
 
-    inline void realizeInitHandshake (const int rang)
+    inline void realizeInitHandshake(const int rang)
     {
+        std::vector<int> blocks{ 1,1,1 }; auto it = blocks.begin();
+        MPI_Datatype datatype = mpi_driver::createCustomDatatype(it, MPI_INT, MPI_INT, MPI_INT);
+
         init_payload i_pl;
-        mpi_variables mpi_vars;
-        mpi_vars.count = 3;
-        mpi_vars.blocks.push_back(1);mpi_vars.blocks.push_back(1);mpi_vars.blocks.push_back(1);
-        mpi_vars.types.push_back(MPI_INT);mpi_vars.types.push_back(MPI_INT);mpi_vars.types.push_back(MPI_INT);
-
-        MPI_Aint intex, intlb;
-        MPI_Type_get_extent(MPI_INT, &intlb, &intex);
-
-        mpi_vars.displacements.push_back(static_cast<MPI_Aint>(0));mpi_vars.displacements.push_back(intex);mpi_vars.displacements.push_back(intex + intex);
-
-        MPI_Datatype obj_type;
-        MPI_Type_create_struct(mpi_vars.count, &(*mpi_vars.blocks.begin()), &(*mpi_vars.displacements.begin()), &(*mpi_vars.types.begin()), &obj_type);
-        MPI_Type_commit(const_cast<MPI_Datatype*>(&obj_type));
 
         mpi_connector_carte<init_payload> connector_carte{};
         auto init_context(mpi_driver::make_mpi_context(
-            0, 0, MPI_COMM_WORLD, obj_type
+            0, 0, MPI_COMM_WORLD, datatype
             ));
         init_context.count = 1;
 
@@ -97,6 +82,8 @@ namespace mpi_interface
         {
             std::cout << "I am the lead process | c : " << i_pl.canal_carte_tag << " j : " << i_pl.canal_juge_tag << " q_s : " << connector_carte.queue.size() << " |" << std::endl;
         }
+
+        MPI_Type_free(&datatype);
     }
 }
 

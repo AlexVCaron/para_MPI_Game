@@ -27,6 +27,12 @@ struct canal_traits
     typedef typename impl_type::message_type message_type;
 };
 
+struct request_type
+{
+    typedef struct is_sync {} sync;
+    typedef struct is_async {} async;
+};
+
 struct canal_direction
 {
     typedef struct direction_out {} _send;
