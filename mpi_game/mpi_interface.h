@@ -9,7 +9,7 @@
 #include <iostream>
 #include <string>
 #include <forward_list>
-#include "../projs/vs_proj_alex/mpi_game/mpi_game/Incopiable.h"
+#include "Incopiable.h"
 
 namespace mpi_interface
 {
