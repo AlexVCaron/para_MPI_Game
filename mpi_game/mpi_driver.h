@@ -22,7 +22,7 @@ namespace mpi_driver
         MPI_Comm comm;
         MPI_Status* status;
         mpi_context() {}
-        mpi_context(mpi_context&& oth) : datatype{ oth.datatype }, count{ oth.count }, target{ oth.target }, tag{ oth.tag }, comm{ oth.comm }, status{ oth.status } {}
+        mpi_context(mpi_context&& oth) noexcept : datatype{ oth.datatype }, count{ oth.count }, target{ oth.target }, tag{ oth.tag }, comm{ oth.comm }, status{ oth.status } {}
     };
 
     template<class mess_type>

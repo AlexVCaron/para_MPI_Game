@@ -34,7 +34,7 @@ public:
 
     explicit actionStream(mpi_driver::mpi_context&& ct) : fill{ action_handles.begin() }, context{ std::move(ct) } { };
 
-    void scale(size_t size) { action_handles.resize(size); }
+    void scale(size_t size) { assert(size > action_handles.size()); action_handles.resize(size); }
 
     size_t size() { return action_handles.size(); }
 

@@ -68,7 +68,7 @@ namespace carte
     {
 
         bool in_function = true;
-        actionStream<datatype> action_stream;
+        actionStream<datatype, MAX_QUEUE_SIZE> action_stream;
         int nb_actors;
         Scene* scene_ptr;
 
@@ -127,10 +127,6 @@ namespace carte
         }
 
     };
-
-
-
-
 }
 
 #endif
