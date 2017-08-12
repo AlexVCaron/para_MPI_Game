@@ -21,6 +21,8 @@ namespace mpi_driver
         int tag;
         MPI_Comm comm;
         MPI_Status* status;
+        mpi_context() {}
+        mpi_context(mpi_context&& oth) : datatype{ oth.datatype }, count{ oth.count }, target{ oth.target }, tag{ oth.tag }, comm{ oth.comm }, status{ oth.status } {}
     };
 
     template<class mess_type>
@@ -54,9 +56,8 @@ namespace mpi_driver
         template<class mpi_context_type>
         message_type resolveAll(message_type message, mpi_context_type& context)
         {
-            message_type buff;
-            MPI_Bcast(&buff, context.count, context.datatype, context.target, context.comm);
-            return buff;
+            MPI_Bcast(&message, context.count, context.datatype, context.target, context.comm);
+            return message;
         }
 
         template<class mpi_context_type, class F>
@@ -65,6 +66,13 @@ namespace mpi_driver
             message_type *buff = malloc(sizeof(message_type) * context.count);
             MPI_Gather(&message, 1, context.datatype, buff, 1, context.datatype, context.target, context.comm);
             return buff_resolve(buff, context.count);
+        }
+
+        template<class mpi_context_type, class F>
+        message_type resolveAll(request_type* request, message_type message, mpi_context_type& context)
+        {
+            MPI_Ibcast(&message, context.count, context.datatype, context.target, context.comm, request);
+            return message;
         }
     };
 

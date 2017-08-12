@@ -4,39 +4,19 @@
 #include "connecteur.h"
 #include <mpi.h>
 #include "mpi_driver.h"
+#include "Action.h"
+#include <iostream>
 
 namespace carte
 {
+    using datatype = char;
 
-    class Juge
-    {
-        using action_connector = connecteur<canal_acteur<mpi_driver::broadcaster_mpi<std::pair<int, int>>>>;
-        bool in_function = true;
-        std::vector<MPI_Request> action_handles;
-        action_connector connector;
-        int nb_actors;
-        mpi_driver::mpi_context context;
-    public:
-        void listen(int source)
-        {
-            for (int i = 0; i < nb_actors; ++i)
-            {
-                action_handles.emplace_back(connector.request<canal_direction::_receive, request_type::is_async>(context));
-            }
-
-            while(in_function)
-            {
-                
-            }
-        }
-
-        void close() { in_function = false; }
-    };
+    const size_t MAX_QUEUE_SIZE = 10;
 
     class Scene
     {
         unsigned int nb_rat, nb_chasseurs, nb_fromages;
-        std::vector<char> grille;
+        std::vector<datatype> grille;
 
         void countGridElements()
         {
@@ -48,8 +28,17 @@ namespace carte
             }
         }
 
+        struct update
+        {
+        private:
+            using connector = connecteur<canal_acteur<mpi_driver::master_broadcaster_mpi<std::vector<char>>>>;
+        public:
+            std::vector<datatype> updates;
+            connector update_connector;
+        };
+
     public:
-        Scene(std::vector<char>&& grille) : nb_rat{ 0 }, nb_chasseurs{ 0 }, nb_fromages{ 0 }, grille{ grille } { countGridElements(); }
+        Scene(std::vector<datatype>&& grille) : nb_rat{ 0 }, nb_chasseurs{ 0 }, nb_fromages{ 0 }, grille{ grille } { countGridElements(); }
 
         template <class T>
         using actor_ct = connecteur<canal_acteur<mpi_driver::master_broadcaster_mpi<T>>>;
@@ -63,6 +52,50 @@ namespace carte
                 connector.request<canal_direction::_send>(i > nb_rat, context);
             }
         }
+
+        void propagateUpdate()
+        {
+            
+        }
+
+        void updateSelf(datatype data)
+        {
+            std::cout << data;
+        }
+    };
+
+    class Juge
+    {
+
+        bool in_function = true;
+        actionStream<datatype> action_stream;
+        int nb_actors;
+        Scene* scene_ptr;
+
+    public:
+        void listen(int source)
+        {
+            action_stream.context.target = source;
+            std::vector<request<datatype>>::iterator actions;
+            while (in_function && action_stream >> actions)
+            {
+                if (action_stream.empty()) {
+                    processAction(action_stream.unpack(actions));
+                }
+                else
+                {
+                    scene_ptr->propagateUpdate();
+                }
+            }
+            action_stream.clear();
+        }
+
+        void processAction(datatype action) const
+        {
+            scene_ptr->updateSelf(action);
+        }
+
+        void close() { in_function = false; }
     };
 
     class Carte
