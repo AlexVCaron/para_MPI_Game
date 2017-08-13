@@ -14,11 +14,9 @@
 namespace mpi_interface
 {
     template<class message_type>
-    using mpi_connector_juge = connecteur<canal_juge<mpi_driver::broadcaster_type<message_type>>>;
+    using mpi_main_connector = connecteur<canal_juge<mpi_driver::master_broadcaster_mpi<message_type>>>;
     template<class message_type>
-    using mpi_connector_carte = connecteur<canal_carte<mpi_driver::master_broadcaster_mpi<message_type>>>;
-    template<class message_type>
-    using mpi_connector_acteur = connecteur<canal_acteur<mpi_driver::master_broadcaster_mpi<message_type>>>;
+    using mpi_slave_connector = connecteur<canal_acteur<mpi_driver::broadcaster_mpi<message_type>>>;
 
     struct canal_juge_tag {};
     struct canal_carte_tag {};
@@ -67,21 +65,23 @@ namespace mpi_interface
 
         init_payload i_pl;
 
-        mpi_connector_carte<init_payload> connector_carte{};
+        
         auto init_context(mpi_driver::make_mpi_context(
             0, 0, MPI_COMM_WORLD, datatype
             ));
         init_context.count = 1;
 
-        connector_carte.request<canal_direction::_send_all>(i_pl, init_context);
-
-        if (rang != root_rank) {
-            i_pl = connector_carte.queue.front();
-            std::cout << "I am an actor process #" << rang << " | Hello World !!! | c : " << i_pl.canal_carte_tag << " j : " << i_pl.canal_juge_tag << " q_s : " << connector_carte.queue.size() << " |" << std::endl;
+        if (rang == root_rank) {
+            mpi_main_connector<init_payload> connector_carte{};
+            connector_carte.request<canal_direction::_send_all>(i_pl, init_context);
+            std::cout << "I am the lead process | c : " << i_pl.canal_carte_tag << " j : " << i_pl.canal_juge_tag << " q_s : " << connector_carte.queue.size() << " |" << std::endl;
         }
         else
         {
-            std::cout << "I am the lead process | c : " << i_pl.canal_carte_tag << " j : " << i_pl.canal_juge_tag << " q_s : " << connector_carte.queue.size() << " |" << std::endl;
+            mpi_slave_connector<init_payload> connector_acteur{};
+            connector_acteur.request<canal_direction::_receive_all>(init_context);
+            i_pl = connector_acteur.queue.front();
+            std::cout << "I am an actor process #" << rang << " | Hello World !!! | c : " << i_pl.canal_carte_tag << " j : " << i_pl.canal_juge_tag << " q_s : " << connector_acteur.queue.size() << " |" << std::endl;
         }
 
         MPI_Type_free(&datatype);

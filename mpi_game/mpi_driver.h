@@ -2,7 +2,7 @@
 #define MPI_DRIVER
 
 #include "mpi.h"
-#include "function_traits.h"
+#include "canal_types.h"
 #include <vector>
 
 namespace mpi_driver
@@ -45,6 +45,14 @@ namespace mpi_driver
         void resolve(m_type message, mpi_context_type& context)
         {
             MPI_Send(&message, context.count, context.datatype, context.target, context.tag, context.comm);
+        }
+
+        template<class mpi_context_type>
+        message_type resolveAll(mpi_context_type& context)
+        {
+            message_type message;
+            MPI_Bcast(&message, context.count, context.datatype, context.target, context.comm);
+            return message;
         }
     };
 

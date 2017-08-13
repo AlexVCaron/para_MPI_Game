@@ -5,50 +5,81 @@
 #include <mpi.h>
 #include "mpi_driver.h"
 #include "Action.h"
-#include <iostream>
+#include "Base.h"
+#include "Update.h"
+#include "Character.h"
+#include "Rat.h"
+#include "Chasseur.h"
+
+
+class BadRoleException {};
 
 class Actor
 {
-	using datatype = char;
+	using action_datatype = int;
+    using update_datatype = std::vector<std::pair<uint32_t, char>>;
+    using update_stream_t = updateStream<in_stream, update_datatype, 1>;
 
-	actionStream<datatype, 10> action_stream;
+	actionStream<out_stream, action_datatype, 10> action_stream;
+    update_stream_t  update_stream;
+
+    Character actor;
+
 	bool in_function = true;
 
-	template <class T>
-	using actor_ct = connecteur<canal_acteur<mpi_driver::master_broadcaster_mpi<T>>>;
+public:
 
-	void sendMoveRequest(unsigned int move[])
+    Actor() : action_stream( mpi_driver::make_mpi_context(0,0,MPI_COMM_WORLD, MPI_INT) ) {  }
+
+	void sendMoveRequest(action_datatype move)
 	{
-		actor_ct<char> connector;
-		auto context = mpi_driver::make_mpi_context(0, 0, MPI_COMM_WORLD, MPI_INT);
-		connector.request<canal_direction::_send>(move, context);
+        action_stream << move;
 	}
 
-	void processAction(datatype action) const
+    void initialize()
+    {
+        using init_connector = mpi_interface::mpi_slave_connector<uint8_t>;
+
+        auto context = mpi_driver::make_mpi_context(0, 0, MPI_COMM_WORLD, MPI_INT);
+        init_connector i_ct; i_ct.request<canal_direction::_receive>(context);
+
+        int role = i_ct.queue.front();
+        switch (role) {
+        case 0:
+            actor = Rat();
+            break;
+        case 1:
+            actor = Chasseur();
+            break;
+        default:
+            throw BadRoleException{};
+        }
+    }
+
+    action_datatype getNextAction()
+    {
+        return action_datatype();
+    }
+
+    void start ()
 	{
-		switch (action) {
-			case '0': 
-				break;
-			case '1' : 
-				break;
-		}
+        while (in_function) {
+            action_stream << getNextAction();
+            update();
+        }
 	}
 
-	void listen(int source)
+	void processUpdate(update_datatype update) const { }
+
+	void update()
 	{
-		action_stream.context.target = source;
-		std::vector<request<datatype>>::iterator actions;
-		while (in_function && action_stream >> actions)
+        update_stream_t::request_it update;
+		while (update_stream >> update)
 		{
-			if (action_stream.empty()) {
-				processAction(action_stream.unpack(actions));
-			}
-			else
-			{
-				scene_ptr->propagateUpdate();
+			if (!update_stream.empty()) {
+                processUpdate(update_stream.unpack(update));
 			}
 		}
-		action_stream.clear();
 	}
 
 };

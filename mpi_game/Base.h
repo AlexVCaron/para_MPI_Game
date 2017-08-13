@@ -1,6 +1,10 @@
 #ifndef BASE_STREAM_H
 #define BASE_STREAM_H
 
+#include "mpi.h"
+#include "mpi_driver.h"
+#include "connecteur.h"
+
 template<class datatype>
 struct request
 {
@@ -47,15 +51,17 @@ public:
         return true;
     }
 
-    ~actionStream()
+    ~mpi_stream_frame()
     {
         clear();
     }
 };
 
 template<class connector_t, class datatype, size_t init_queue_size = 10>
-struct in_stream : mpi_stream_frame<connector_t, datatype, init_size_queue> {
-    in_stream& operator>>(typename std::vector<request<datatype>>::iterator& req) {
+struct in_stream : mpi_stream_frame<connector_t, datatype, init_queue_size> {
+    using request_it = typename std::vector<request<datatype>>::iterator;
+    explicit in_stream(mpi_driver::mpi_context&& ct) : mpi_stream_frame{ ct } {};
+    in_stream& operator>>(request_it& req) {
         while (fill != action_handles.end() && completed(fill))
             connector.request<canal_direction::_receive, request_type::is_async>(fill++, context);
         req = action_handles.begin();
@@ -74,7 +80,8 @@ struct in_stream : mpi_stream_frame<connector_t, datatype, init_size_queue> {
 };
 
 template<class connector_t, class datatype, size_t init_queue_size = 10>
-struct out_stream : mpi_stream_frame<connector_t, datatype, init_size_queue> {
+struct out_stream : mpi_stream_frame<connector_t, datatype, init_queue_size> {
+    explicit out_stream(mpi_driver::mpi_context&& ct) : mpi_stream_frame{ ct } {};
     out_stream& operator<<(datatype mess) {
         MPI_Request req;
         connector.request<canal_direction::_send, request_type::is_async>(mess, req, context);

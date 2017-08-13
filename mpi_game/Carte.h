@@ -6,6 +6,7 @@
 #include "mpi_driver.h"
 #include "Action.h"
 #include <iostream>
+#include "Base.h"
 
 namespace carte
 {
