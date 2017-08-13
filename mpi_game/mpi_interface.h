@@ -91,29 +91,13 @@ namespace mpi_interface
     {
         MPI_Win* signal_window;
 
-        explicit signal_handle(MPI_Win& window) : signal_window{ &window } {}
+        explicit signal_handle(MPI_Win* window) : signal_window{ window } {}
 
-        template<class T, MPI_Datatype datatype>
+        template<MPI_Datatype datatype, class T>
         void put(T message, int target)
         {
             MPI_Put(&message, 1, datatype, target, 0, 1, datatype, *signal_window);
         }
-    };
-
-    struct read_only_signal
-    {
-        MPI_Win* signal_window;
-
-        explicit read_only_signal(MPI_Win& window) : signal_window{ &window } {}
-
-        template<class T, MPI_Datatype datatype>
-        T get(int target)
-        {
-            T message;
-            MPI_Get(&message, 1, datatype, target, 0, 1, datatype, *signal_window);
-            return std::move(message);
-        }
-
     };
 }
 

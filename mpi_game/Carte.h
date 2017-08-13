@@ -11,13 +11,17 @@
 namespace carte
 {
     using datatype = char;
+    using action_datatype = int;
 
     const size_t MAX_QUEUE_SIZE = 10;
+    
 
     class Scene
     {
         unsigned int nb_rat, nb_chasseurs, nb_fromages;
         std::vector<datatype> grille;
+        std::vector<unsigned int> actor_pos;
+        mpi_interface::signal_handle end_o_game_signal;
 
         void countGridElements()
         {
@@ -29,17 +33,15 @@ namespace carte
             }
         }
 
-        struct update
+        void endGame()
         {
-        private:
-            using connector = connecteur<canal_acteur<mpi_driver::master_broadcaster_mpi<std::vector<char>>>>;
-        public:
-            std::vector<datatype> updates;
-            connector update_connector;
-        };
+            for (unsigned int i = 1; i < nb_chasseurs + nb_rat; ++i) end_o_game_signal.put<MPI_C_BOOL>(true, i);
+        }
+
+        std::vector<std::pair<int, int>> updates;
 
     public:
-        Scene(std::vector<datatype>&& grille) : nb_rat{ 0 }, nb_chasseurs{ 0 }, nb_fromages{ 0 }, grille{ grille } { countGridElements(); }
+        Scene(std::vector<datatype>&& grille, MPI_Win* end_o_game_w) : end_o_game_signal{ end_o_game_w }, nb_rat { 0 }, nb_chasseurs{ 0 }, nb_fromages{ 0 }, grille{ grille } { countGridElements(); }
 
         template <class T>
         using actor_ct = connecteur<canal_acteur<mpi_driver::master_broadcaster_mpi<T>>>;
@@ -59,9 +61,10 @@ namespace carte
             
         }
 
-        void updateSelf(datatype data)
+        void updateSelf(std::pair<int,action_datatype> data)
         {
-            std::cout << data;
+            std::swap(grille[actor_pos[data.first]], grille[data.second]);
+            updates.push_back(data);
         }
     };
 
@@ -110,14 +113,9 @@ namespace carte
             scene.assignRoles(nb_actor_procs);
         }
 
-        void endGame()
-        {
-            
-        }
-
     public:
         Carte() = delete;
-        Carte(unsigned int nb_actor_procs, std::vector<char>&& grille) : scene{ std::move(grille) }
+        Carte(unsigned int nb_actor_procs, std::vector<char>&& grille, MPI_Win* end_o_game_w) : scene{ std::move(grille), end_o_game_w }
         {
             
         }

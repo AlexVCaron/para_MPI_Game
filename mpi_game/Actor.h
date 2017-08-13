@@ -25,11 +25,11 @@ class Actor
 
     Character actor;
 
-	bool in_function = true;
+	bool* end_o_game_flag;
 
 public:
 
-    Actor() : action_stream( mpi_driver::make_mpi_context(0,0,MPI_COMM_WORLD, MPI_INT) ) {  }
+    Actor(bool* end_o_game_flag) : end_o_game_flag{ end_o_game_flag }, action_stream(mpi_driver::make_mpi_context(0, 0, MPI_COMM_WORLD, MPI_INT)) {  }
 
 	void sendMoveRequest(action_datatype move)
 	{
@@ -63,11 +63,11 @@ public:
 
     void start ()
 	{
-        while (in_function) {
+        while (!(*end_o_game_flag)) {
             action_stream << getNextAction();
             update();
         }
-	}
+	}   
 
 	void processUpdate(update_datatype update) const { }
 
