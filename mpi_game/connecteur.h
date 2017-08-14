@@ -12,9 +12,14 @@ struct connecteur
 
     std::deque<m_type> queue;
 
-    template<class direction, class sync = request_type::is_sync, class ... Args>
+    template<class direction, class ... Args>
     void request(Args&& ... args) {
-        request(direction(), sync(), args ...);
+        request(direction(), args ...);
+    };
+
+    template<class direction, class req, class ... Args>
+    void request(req* rq, Args&& ... args) {
+        request(direction(), rq, args ...);
     };
 
     bool isEmpty() { return queue.empty(); }
@@ -22,56 +27,56 @@ struct connecteur
     ~connecteur() { queue.clear(); }
 private:
 
-    template<class direction, class sync, class ... Args>
-    void request(direction, request_type::is_sync, Args&& ... args) {
+    template<class direction, class ... Args>
+    void request(direction, Args&& ... args) {
         request(direction(), args ...);
     }
 
-    template<class direction, class ... Args>
-    void request(direction, request_type::is_async, req_type& req, Args&& ... args) {
-        request(direction(), req, args ...);
+    template<class direction, class req, class ... Args>
+    void request(direction, req* rq, Args&& ... args) {
+        request(direction(), rq, args ...);
     }
 
     template<class ... Args>
-    void request(canal_direction::_receive, request_type::is_sync, Args&& ... args)
+    void request(canal_direction::_receive, Args&& ... args)
     {
         queue.push_back(impl().resolve(args ...));
     }
     template<class ... Args>
-    void request(canal_direction::_send, request_type::is_sync, Args&& ... args)
+    void request(canal_direction::_send, Args&& ... args)
     {
         impl().resolve(args ...);
     }
 
-    template<class ... Args>
-    void request(canal_direction::_receive, request_type::is_async, req_type& request, Args&& ... args)
+    template<class req, class ... Args>
+    void request(canal_direction::_receive, req* request, Args&& ... args)
     {
         queue.push_back(impl().resolve(request, args ...));
     }
-    template<class ... Args>
-    void request(canal_direction::_send, request_type::is_async, req_type& request, Args&& ... args)
+    template<class req, class ... Args>
+    void request(canal_direction::_send, req* request, Args&& ... args)
     {
         impl().resolve(request, args ...);
     }
 
     template<class ... Args>
-    void request(canal_direction::_receive_all, request_type::is_sync, Args&& ... args)
+    void request(canal_direction::_receive_all, Args&& ... args)
     {
         queue.push_back(impl().resolveAll(args ...));
     }
     template<class ... Args>
-    void request(canal_direction::_send_all, request_type::is_sync, Args&& ... args)
+    void request(canal_direction::_send_all, Args&& ... args)
     {
         impl().resolveAll(args ...);
     }
 
     template<class ... Args>
-    void request(canal_direction::_receive_all, request_type::is_async, req_type& request, Args&& ... args)
+    void request(canal_direction::_receive_all, req_type& request, Args&& ... args)
     {
         queue.push_back(impl().resolveAll(request, args ...));
     }
     template<class ... Args>
-    void request(canal_direction::_send_all, request_type::is_async, req_type& request, Args&& ... args)
+    void request(canal_direction::_send_all, req_type& request, Args&& ... args)
     {
         impl().resolveAll(request, args ...);
     }

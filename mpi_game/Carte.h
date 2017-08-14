@@ -9,6 +9,9 @@
 #include <iostream>
 #include "Base.h"
 #include <algorithm>
+#include <thread>
+
+using namespace std;
 
 namespace carte
 {
@@ -45,11 +48,6 @@ namespace carte
             }
         }
 
-        void endGame()
-        {
-            for (unsigned int i = 1; i < nb_chasseurs + nb_rat; ++i) end_o_game_signal.put<MPI_C_BOOL>(true, i);
-        }
-
         std::vector<update_pack> updates;
 
     public:
@@ -59,6 +57,12 @@ namespace carte
         {
             update_m_stream.context.count = 2;
             countGridElements();
+        }
+
+
+        void endGame()
+        {
+            for (unsigned int i = 1; i < nb_chasseurs + nb_rat; ++i) end_o_game_signal.put<MPI_C_BOOL>(true, i);
         }
 
         void assignRoles(unsigned int nb_actor_procs)
@@ -119,27 +123,30 @@ namespace carte
 
     class Juge
     {
-
+        int cpt = 0;
         bool in_function = true;
         
         int nb_actors;
         Scene* scene_ptr;
 
-        actionStream<in_stream, action_datatype, MAX_QUEUE_SIZE> action_stream;
+        actionStream<a_in_stream, action_datatype, 1> action_stream;
 
     public:
         Juge(Scene* scene, int nb_actors) : nb_actors{ nb_actors }, scene_ptr{ scene },
-                                            action_stream(mpi_driver::make_mpi_context(0, 0, MPI_COMM_WORLD, MPI_INT)) {}
-
-        void listen(int source)
+                                            action_stream(mpi_driver::make_mpi_context(0, 0, MPI_COMM_WORLD, MPI_INT))
         {
-            action_stream.context.target = source;
+            action_stream.context.count = 1;
+            action_stream.context.target = MPI_ANY_SOURCE;
+        }
+
+        void listen()
+        {
             std::vector<request<action_datatype>>::iterator actions;
             while (in_function && action_stream >> actions)
             {
                 if (action_stream.empty()) {
                     int caller;
-                    processAction(action_stream.unpack(actions, &caller), caller);
+                    processAction(action_stream.unpack(actions, caller), caller);
                 }
                 else
                 {
@@ -147,6 +154,34 @@ namespace carte
                 }
             }
             action_stream.clear();
+        }
+
+        void fakeListen()
+        {
+            std::vector<request<action_datatype>>::iterator actions;
+            std::cout << "JUGE | setting cannals" << std::endl;
+            while (cpt < 40 && in_function && action_stream >> actions)
+            {
+                std::cout << "JUGE | checking for actions" << std::endl;
+                if (!(action_stream.empty())) {
+                    int caller = 0;
+                    std::cout << "JUGE | checking fake" << std::endl;
+                    while (actions != action_stream.begin()) {
+                        std::cout << "JUGE | processing fake " << actions - action_stream.begin() << std::endl;
+                        processFake(action_stream.unpack(actions, caller), caller);
+                        cpt++;
+                    }
+                }
+                std::cout << "JUGE | setting cannals" << std::endl;
+                std::this_thread::sleep_for(1000ms);
+            }
+            action_stream.clear();
+            scene_ptr->endGame();
+        }
+
+        void processFake(action_datatype action, int caller)
+        {
+            std::cout << "Juge received movement " << action << " from " << caller << std::endl;
         }
 
         void processAction(action_datatype action, int caller) const
@@ -178,7 +213,12 @@ namespace carte
 
         void startGame()
         {
-            juge.listen(MPI_ANY_SOURCE);
+            juge.listen();
+        }
+
+        void fakeStartGame()
+        {
+            juge.fakeListen();
         }
 
     };

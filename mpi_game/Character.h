@@ -22,7 +22,7 @@ protected:
     int fearLevel = 0;
     unsigned int position;
 public:
-    int priseDecision() { return -2; }
+    virtual int priseDecision() { return -2; }
 
     void raiseInFear() { fearLevel = 5; }
 

@@ -19,11 +19,13 @@ int main(int argc, char **argv)
     {
         carte::Carte ct(mpi_scope.nb_processus() - 1, grille, &end_o_game_w);
         ct.initializeActors(mpi_scope.nb_processus() - 1);
+        ct.fakeStartGame();
     }
     else
     {
         Actor actor(&end_o_game_sig);
         actor.initialize();
+        actor.fakeStart();
     }
     MPI_Info_free(&info);
     MPI_Win_free(&end_o_game_w);

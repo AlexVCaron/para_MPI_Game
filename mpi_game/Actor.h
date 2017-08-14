@@ -11,13 +11,12 @@
 #include "Character.h"
 #include "Rat.h"
 #include "Chasseur.h"
-#include <limits>
-#include <cmath>
-
+#include <thread>
 
 
 // Pour la recherche de chemin, si c'est un mur dans un sens, aller a la perpendiculaire....
 
+using namespace std;
 
 class BadRoleException {};
 
@@ -46,6 +45,7 @@ public:
                                                                        update_m_stream(mpi_driver::make_mpi_context(0,0, MPI_COMM_WORLD, MPI_INT)),
                                                                        update_d_stream(mpi_driver::make_mpi_context(0, 0, MPI_COMM_WORLD))
     { 
+        action_stream.context.count = 1;
         update_m_stream.context.count = 2;
     }
 
@@ -60,7 +60,10 @@ public:
         auto context = mpi_driver::make_mpi_context(MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, MPI_CHAR);
         context.count = 1;
         init_connector i_ct; i_ct.request<canal_direction::_receive>(context);
+        std::cout << "I am an actor requesting role !" << std::endl;
         char role = i_ct.queue.front();
+        std::cout << "I am an actor, here is my role : ";
+        std::cout << role << std::endl;
         switch (role) {
         case '0':
             std::cout << "I am an actor playing a rat !" << std::endl;
@@ -75,18 +78,26 @@ public:
         }
     }
 
-    action_datatype getNextAction()
-    {
-        return action_datatype();
-    }
-
     void start ()
 	{
         while (!(*end_o_game_flag)) {
-            action_stream << getNextAction();
+            int decision = actor->priseDecision();
+            action_stream << decision;
+            std::cout << "sending message " << decision << std::endl;
+            std::this_thread::sleep_for(1000ms);
             update();
         }
-	}   
+	}
+
+    void fakeStart()
+    {
+        while (!(*end_o_game_flag)) {
+            int decision = actor->priseDecision();
+            action_stream << decision;
+            std::cout << "sending message " << decision << std::endl;
+            std::this_thread::sleep_for(1000ms);
+        }
+    }
 
 	void processUpdate(update_datatype update, int count) {
         std::for_each(&update, &update + count, [&](update_datatype& upd) {
@@ -102,15 +113,18 @@ public:
 	{
         update_meta_stream_t::request_it m_update;
         update_data_stream_t::request_it d_update;
+        std::cout << "actor getting an update" << std::endl;
         update_m_stream >> m_update;
+        std::cout << "actor testing an update" << std::endl;
         if (!update_m_stream.empty()) {
-            int* meta = update_m_stream.unpack(m_update);
+            int caller;
+            int* meta = update_m_stream.unpack(m_update, caller);
             if (meta[0] == -1) processScream();
             else {
                 update_d_stream.context.count = meta[1];
                 update_d_stream >> d_update;
                 if (!update_d_stream.empty()) {
-                    processUpdate(update_d_stream.unpack(d_update), meta[1]);
+                    processUpdate(update_d_stream.unpack(d_update, caller), meta[1]);
                 }
             }
         }

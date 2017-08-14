@@ -26,7 +26,7 @@ class Chasseur : public Character
         }
     }
 
-    int priseDecision() {
+    virtual int priseDecision() {
         int posCible = meilleureDistanceCible('R');
         if (distEuclidienne(position, posCible) < 10) {
             return -1;

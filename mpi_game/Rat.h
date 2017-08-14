@@ -4,7 +4,7 @@
 
 class Rat : public Character
 {
-    int priseDecision() {
+    virtual int priseDecision() {
         int posCible;
         if (fearLevel != 0) {
             fearLevel--;

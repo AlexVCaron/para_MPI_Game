@@ -34,30 +34,36 @@ namespace mpi_driver
         using request_type = MPI_Request;
 
         template<class mpi_context_type>
-        message_type resolve(request_type& rq, mpi_context_type& context)
+        message_type resolve(request_type* rq, mpi_context_type& context)
         {
             message_type *buff = static_cast<message_type*>(malloc(sizeof(message_type) * context.count));
-            MPI_Irecv(&buff, context.count, context.datatype, context.target, context.tag, context.comm, &rq);
+            MPI_Irecv(buff, context.count, context.datatype, context.target, context.tag, context.comm, rq);
             return *buff;
         }
 
         template<class mpi_context_type, class m_type>
-        void resolve(request_type& rq, m_type message, mpi_context_type& context)
+        void resolve(request_type* rq, m_type message, mpi_context_type& context)
         {
-            MPI_Isend(&message, context.count, context.datatype, context.target, context.tag, context.comm, &rq);
+            MPI_Isend(&message, context.count, context.datatype, context.target, context.tag, context.comm, rq);
         }
 
         template<class mpi_context_type>
         message_type resolve(mpi_context_type& context)
         {
             message_type *buff = static_cast<message_type*>(malloc(sizeof(message_type) * context.count));
-            MPI_Recv(&buff, context.count, context.datatype, context.target, context.tag, context.comm, &(*context.status));
+            MPI_Status status; int number_amount;
+            MPI_Probe(context.target, context.tag, context.comm, &status);
+            MPI_Get_count(&status, MPI_CHAR, &number_amount); std::cout << "Buffer of actor set to receive " << context.count << ", will receive " << number_amount << " from " << context.target << std::endl;
+
+            MPI_Recv(buff, context.count, context.datatype, context.target, context.tag, context.comm, &(*context.status));
+            std::cout << "actor received " << buff << std::endl;
             return *buff;
         }
 
         template<class mpi_context_type, class m_type>
         void resolve(m_type message, mpi_context_type& context)
         {
+            std::cout << "preparing to send " << message << " to " << context.target << std::endl;
             MPI_Send(&message, context.count, context.datatype, context.target, context.tag, context.comm);
         }
 
