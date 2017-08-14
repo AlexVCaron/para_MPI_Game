@@ -10,10 +10,114 @@
 #include "Character.h"
 #include "Rat.h"
 #include "Chasseur.h"
+#include <limits>
+#include <cmath>
 
+enum Voisins {
+	DOWN = 0,
+	UP = 1,
+	LEFT = 2,
+	RIGHT = 3,
+	DIAG_UP_RIGHT = 4,
+	DIAG_UP_LEFT = 5,
+	DIAG_DOWN_RIGHT = 6,
+	DIAG_DOWN_LEFT = 7
+};
 
 class BadRoleException {};
+class AlreadyThereException {};
+int coordX(int posisition) {
+	return posisition;
+}
 
+int coordY(int posisition) {
+	return posisition;
+}
+
+int distEuclidienne(int position, int cible) {
+	return sqrt(pow(coordX(position) - coordX(cible), 2) + pow(coordY(position) - coordY(cible), 2));
+}
+
+int meilleureDistanceCible(int position, Carte carte, texte cible) {
+	int distCourante;
+	int distRetenue = std::numeric_limits<int>::max();
+	int posRetenue = -1;
+	//Pour chaque cible C dans carte
+	for (auto i = carte.begin(); i != carte.end(); i++) {
+		if (*i == cible) {
+			distCourante = distEuclidienne(position, cible.position());
+			if (distCourante < distRetenue) {
+				distRetenue = distCourante;
+				posRetenue = cible.position();
+			}
+		}
+	}
+}
+
+// Pour la recherche de chemin, si c'est un mur dans un sens, aller a la perpendiculaire....
+Voisins rechercherCheminRat(int position, int cible, char texte[]) {
+	if (coordX(position) > coordX(cible)) {
+		if (coordY(position) > coordY(cible)) return DIAG_UP_LEFT;
+		else if (coordY(position) < coordY(cible)) return DIAG_DOWN_LEFT;
+		else return LEFT;
+	}
+	else if (coordX(position) < coordX(cible)) {
+		if (coordY(position) > coordY(cible)) return DIAG_UP_RIGHT;
+		else if (coordY(position) < coordY(cible)) return DIAG_DOWN_RIGHT;
+		else return RIGHT;
+	}
+	else {
+		if (coordY(position) > coordY(cible)) return UP;
+		else if (coordY(position) < coordY(cible)) return DOWN;
+		else throw AlreadyThereException{};
+	}
+}
+
+Voisins rechercherCheminChasseur(int position, int cible) {
+	if (coordX(position) > coordX(cible)) {
+		if (position + LEFT == mur) {
+			if (coordY(position) < coordY(cible)) return DOWN;
+			else return UP;
+		} else return LEFT;
+	}
+	else if (coordX(position) < coordX(cible)) {
+		if (position + RIGHT == mur) {
+			if (coordY(position) < coordY(cible)) return DOWN;
+			else return UP;
+		}
+		else return RIGHT;
+	}
+	else {
+		if (coordY(position) > coordY(cible)) return UP;
+		else if (coordY(position) < coordY(cible)) return DOWN;
+		else throw AlreadyThereException{};
+	}
+}
+
+void priseDecisionChasseur() {
+	int posCible = meilleureDistanceCible(this.position, this.carte, "rat");
+	if (distEuclidienne(this.position, posCible) < 10) {
+		// Voit un rat
+		//// Meow, bitch
+	}
+	else {
+		Voisins moveTo = rechercherCheminChasseur(this.position, posCible)
+	}
+}
+
+void priseDecisionRat() {
+	if (entendUnMeow) {
+		this.fearLevel = 5;
+		posCible = meilleureDistanceCible(this.position, this.carte, "porte");
+	}
+	else if (this.fearLevel != 0) {
+		this.fearLevel--;
+		posCible = meilleureDistanceCible(this.position, this.carte, "porte");
+	}
+	else posCible = meilleureDistanceCible(this.position, this.carte, "fromage");
+	
+	Voisins moveTo = rechercherCheminRat(this.position, posCible)
+}
 class Actor
 {
 	using action_datatype = int;
