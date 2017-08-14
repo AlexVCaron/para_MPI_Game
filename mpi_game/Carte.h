@@ -53,18 +53,26 @@ namespace carte
         std::vector<update_pack> updates;
 
     public:
-        Scene(std::vector<datatype>&& grille, MPI_Win* end_o_game_w) : end_o_game_signal{ end_o_game_w }, nb_rat { 0 }, nb_chasseurs{ 0 }, nb_fromages{ 0 }, grille{ grille } { countGridElements(); }
-
-        template <class T>
-        using actor_ct = connecteur<canal_acteur<mpi_driver::master_broadcaster_mpi<T>>>;
+        Scene(std::vector<datatype>&& grille, MPI_Win* end_o_game_w) : end_o_game_signal{ end_o_game_w }, nb_rat { 0 }, nb_chasseurs{ 0 }, nb_fromages{ 0 }, grille{ grille },
+                                                                       update_m_stream(mpi_driver::make_mpi_context(0, 0, MPI_COMM_WORLD, MPI_INT)),
+                                                                       update_d_stream(mpi_driver::make_mpi_context(0, 0, MPI_COMM_WORLD))
+        {
+            update_m_stream.context.count = 2;
+            countGridElements();
+        }
 
         void assignRoles(unsigned int nb_actor_procs)
         {
-            actor_ct<char> connector;
-            auto context = mpi_driver::make_mpi_context(MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, MPI_INT);
-            for (unsigned int i = 0; i < nb_actor_procs; ++i)
+            mpi_interface::mpi_main_connector<char> connector;
+            auto context = mpi_driver::make_mpi_context(MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, MPI_CHAR);
+            context.count = 1;
+            for (unsigned int i = 1; i <= nb_actor_procs; ++i)
             {
-                connector.request<canal_direction::_send>(i > nb_rat, context);
+                std::string me = (i > nb_rat) ? "cat" : "rat";
+                std::cout << "map initializing actor nb " << i << " . It a " << me << "." << std::endl;
+                context.target = i;
+                if(i > nb_rat) connector.request<canal_direction::_send>('0', context);
+                else connector.request<canal_direction::_send>('1', context);
             }
         }
 
@@ -79,9 +87,9 @@ namespace carte
             }
             int meta[2] = { -1, 0 };
             std::for_each(pos.begin(), pos.end(), [&](unsigned int pos){
-                update_m_stream.context.target = actor_pos.find(pos)
+                update_m_stream.context.target = *(std::find(actor_pos.begin(), actor_pos.end(), pos));
                 update_m_stream << meta;
-            })
+            });
         }
 
         void propagateUpdate()
@@ -113,11 +121,16 @@ namespace carte
     {
 
         bool in_function = true;
-        actionStream<in_stream, action_datatype, MAX_QUEUE_SIZE> action_stream;
+        
         int nb_actors;
         Scene* scene_ptr;
 
+        actionStream<in_stream, action_datatype, MAX_QUEUE_SIZE> action_stream;
+
     public:
+        Juge(Scene* scene, int nb_actors) : nb_actors{ nb_actors }, scene_ptr{ scene },
+                                            action_stream(mpi_driver::make_mpi_context(0, 0, MPI_COMM_WORLD, MPI_INT)) {}
+
         void listen(int source)
         {
             action_stream.context.target = source;
@@ -147,18 +160,18 @@ namespace carte
 
     class Carte
     {
-
-        Juge juge;
         Scene scene;
+        Juge juge;
+
+    public:
 
         void initializeActors(unsigned int nb_actor_procs)
         {
             scene.assignRoles(nb_actor_procs);
         }
 
-    public:
         Carte() = delete;
-        Carte(unsigned int nb_actor_procs, std::vector<char>&& grille, MPI_Win* end_o_game_w) : scene{ std::move(grille), end_o_game_w }
+        Carte(unsigned int nb_actor_procs, std::vector<char> grille, MPI_Win* end_o_game_w) : scene{ std::move(grille), end_o_game_w }, juge{ &scene, nb_actor_procs }
         {
             
         }

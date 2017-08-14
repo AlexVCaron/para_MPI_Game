@@ -46,12 +46,12 @@ private:
     template<class ... Args>
     void request(canal_direction::_receive, request_type::is_async, req_type& request, Args&& ... args)
     {
-        queue.push_back(impl().resolveAll(request, args ...));
+        queue.push_back(impl().resolve(request, args ...));
     }
     template<class ... Args>
     void request(canal_direction::_send, request_type::is_async, req_type& request, Args&& ... args)
     {
-        impl().resolveAll(request, args ...);
+        impl().resolve(request, args ...);
     }
 
     template<class ... Args>

@@ -20,7 +20,7 @@ namespace mpi_driver
         int target;
         int tag;
         MPI_Comm comm;
-        MPI_Status* status;
+        MPI_Status* status = MPI_STATUS_IGNORE;
         mpi_context() {}
         mpi_context(mpi_context&& oth) noexcept : datatype{ oth.datatype }, count{ oth.count }, target{ oth.target }, tag{ oth.tag }, comm{ oth.comm }, status{ oth.status } {}
     };
@@ -34,11 +34,25 @@ namespace mpi_driver
         using request_type = MPI_Request;
 
         template<class mpi_context_type>
+        message_type resolve(request_type& rq, mpi_context_type& context)
+        {
+            message_type *buff = static_cast<message_type*>(malloc(sizeof(message_type) * context.count));
+            MPI_Irecv(&buff, context.count, context.datatype, context.target, context.tag, context.comm, &rq);
+            return *buff;
+        }
+
+        template<class mpi_context_type, class m_type>
+        void resolve(request_type& rq, m_type message, mpi_context_type& context)
+        {
+            MPI_Isend(&message, context.count, context.datatype, context.target, context.tag, context.comm, &rq);
+        }
+
+        template<class mpi_context_type>
         message_type resolve(mpi_context_type& context)
         {
-            message_type buff;
+            message_type *buff = static_cast<message_type*>(malloc(sizeof(message_type) * context.count));
             MPI_Recv(&buff, context.count, context.datatype, context.target, context.tag, context.comm, &(*context.status));
-            return buff;
+            return *buff;
         }
 
         template<class mpi_context_type, class m_type>
@@ -71,13 +85,13 @@ namespace mpi_driver
         template<class mpi_context_type, class F>
         message_type resolveAll(message_type message, mpi_context_type& context, F buff_resolve)
         {
-            message_type *buff = malloc(sizeof(message_type) * context.count);
+            message_type *buff = static_cast<message_type*>(malloc(sizeof(message_type) * context.count));
             MPI_Gather(&message, 1, context.datatype, buff, 1, context.datatype, context.target, context.comm);
             return buff_resolve(buff, context.count);
         }
 
         template<class mpi_context_type, class F>
-        message_type resolveAll(request_type* request, message_type message, mpi_context_type& context)
+        message_type resolveAll(request_type request, message_type message, mpi_context_type& context)
         {
             MPI_Ibcast(&message, context.count, context.datatype, context.target, context.comm, request);
             return message;
@@ -91,6 +105,15 @@ namespace mpi_driver
         ct.tag = tag;
         ct.comm = comm;
         ct.datatype = datatype;
+        return std::forward<mpi_context>(ct);
+    }
+
+    inline mpi_context make_mpi_context(int target, int tag, MPI_Comm comm)
+    {
+        mpi_context ct;
+        ct.target = target;
+        ct.tag = tag;
+        ct.comm = comm;
         return std::forward<mpi_context>(ct);
     }
 
@@ -111,7 +134,7 @@ namespace mpi_driver
     };
 
     template<class ... Args>
-    MPI_Datatype createCustomDatatype(std::vector<int>::iterator& counts, Args&& ... t)
+    MPI_Datatype createCustomDatatype(std::vector<int>::iterator counts, Args&& ... t)
     {
         MPI_Datatype obj_type;
         mpi_variables mpi_vars;
