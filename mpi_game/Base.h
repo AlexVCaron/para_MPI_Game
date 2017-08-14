@@ -68,13 +68,14 @@ struct in_stream : mpi_stream_frame<connector_t, datatype, init_queue_size> {
         return *this;
     }
 
-    datatype unpack(typename std::vector<request<datatype>>::iterator& req)
+    datatype unpack(typename std::vector<request<datatype>>::iterator& req, int* caller = nullptr)
     {
-        MPI_Status message;
-        if (!completed(req)) MPI_Request_get_status(*(req->rq), nullptr, &message);
+        MPI_Status status;
+        if (!completed(req)) MPI_Request_get_status(*(req->rq), nullptr, &status);
         MPI_Request_free(req->rq);
         for (auto me = req, next = req + 1; me != fill; ++me, ++next) std::swap(*me, *next);
         --fill;
+        if (caller != nullptr) *caller = status.MPI_SOURCE;
         return *((fill + 1)->data);
     }
 };
