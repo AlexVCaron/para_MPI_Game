@@ -25,14 +25,15 @@ namespace carte
     {
         struct update_pack { int pos; char val; };
         using update_datatype = update_pack;
-        using update_metatype = int*;
+        using update_metatype = int;
         using update_meta_stream_t = updateStream<out_stream, update_metatype, 1>;
         using update_data_stream_t = updateStream<out_stream, update_datatype, 1>;
 
         update_meta_stream_t update_m_stream;
         update_data_stream_t update_d_stream;
 
-        unsigned int nb_rat, nb_chasseurs, nb_fromages;
+        int nb_actors;
+        unsigned int nb_rat = 0, nb_chasseurs = 0, nb_fromages = 0;
         std::vector<datatype> grille; int width; int height;
         std::vector<unsigned int> actor_pos;
 
@@ -46,12 +47,13 @@ namespace carte
                 else if (grille[i] == 'R') nb_rat++;
                 else if (grille[i] == 'F') nb_fromages++;
             }
+            assert(nb_rat + nb_chasseurs == nb_actors);
         }
 
         std::vector<update_pack> updates;
 
     public:
-        Scene(std::vector<datatype>&& grille, MPI_Win* end_o_game_w) : end_o_game_signal{ end_o_game_w }, nb_rat { 0 }, nb_chasseurs{ 0 }, nb_fromages{ 0 }, grille{ grille },
+        Scene(std::vector<datatype>&& grille, MPI_Win* end_o_game_w, int nb_actors) : nb_actors{nb_actors}, end_o_game_signal { end_o_game_w }, nb_rat{ 0 }, nb_chasseurs{ 0 }, nb_fromages{ 0 }, grille{ grille },
                                                                        update_m_stream(mpi_driver::make_mpi_context(0, 0, MPI_COMM_WORLD, MPI_INT)),
                                                                        update_d_stream(mpi_driver::make_mpi_context(0, 0, MPI_COMM_WORLD))
         {
@@ -75,8 +77,8 @@ namespace carte
                 std::string me = (i > nb_rat) ? "cat" : "rat";
                 std::cout << "map initializing actor nb " << i << " . It a " << me << "." << std::endl;
                 context.target = i;
-                if(i > nb_rat) connector.request<canal_direction::_send>('0', context);
-                else connector.request<canal_direction::_send>('1', context);
+                if(i > nb_rat) connector.request<canal_direction::_send>(context, '0');
+                else connector.request<canal_direction::_send>(context, '1');
             }
         }
 
@@ -92,21 +94,30 @@ namespace carte
             int meta[2] = { -1, 0 };
             std::for_each(pos.begin(), pos.end(), [&](unsigned int pos){
                 update_m_stream.context.target = *(std::find(actor_pos.begin(), actor_pos.end(), pos));
-                update_m_stream << meta;
+                update_m_stream << &meta[0];
             });
         }
 
         void propagateUpdate()
         {
-            int meta[2] = { 1 , updates.size() };
+            int meta[2] = { 1 , int(updates.size()) };
             update_d_stream.context.count = updates.size();
+            update_pack* buff = static_cast<update_pack*>(malloc(sizeof(update_pack) * updates.size()));
+            std::cout << "SCEN | creating update" << std::endl;
+            for (int i = 0; i < updates.size(); ++i)
+            {
+                buff[i] = updates[i];
+            }
+            std::cout << "SCEN | end creating update" << std::endl;
+            std::cout << "SCEN | gotta send meta " << meta[0] << " " << meta[1] << std::endl;
             for (int i = 1; i <= nb_chasseurs + nb_rat; ++i) {
+                std::cout << "SCEN | sending to " << i << std::endl;
                 update_m_stream.context.target = i;
                 update_d_stream.context.target = i;
-                update_m_stream << meta;
-                update_d_stream << updates.front();
+                update_m_stream << &meta[0];
+                if(meta[1] > 0) update_d_stream << &buff[0];
             }
-            
+            free(buff);
         }
 
         void updateSelf(std::pair<int,action_datatype> data)
@@ -115,7 +126,7 @@ namespace carte
             update_pack pack_1, pack_2; 
             pack_1.pos = actor_pos[data.first]; pack_1.val = grille[actor_pos[data.first]];
             pack_2.pos = data.second; grille[data.second];
-
+            std::cout << "updating grille" << std::endl;
             updates.push_back(pack_1);
             updates.push_back(pack_2);
         }
@@ -141,53 +152,52 @@ namespace carte
 
         void listen()
         {
-            std::vector<request<action_datatype>>::iterator actions;
-            while (in_function && action_stream >> actions)
+            std::cout << "JUGE | listening" << std::endl;
+            int cpt = nb_actors, cptg = 0;
+            std::vector<request_t<action_datatype*>>::iterator actions;
+            while (cptg < 2 * nb_actors && in_function && action_stream >> actions)
             {
-                if (action_stream.empty()) {
-                    int caller;
+                if (cpt != 0) {
+                    --cpt;
+                    int caller = 0;
+                    std::cout << "JUGE | processing an action" << std::endl;
                     processAction(action_stream.unpack(actions, caller), caller);
+                    cptg++;
                 }
                 else
                 {
+                    std::this_thread::sleep_for(1000ms);
+                    cpt = nb_actors;
                     scene_ptr->propagateUpdate();
                 }
             }
-            action_stream.clear();
+            scene_ptr->endGame();
         }
 
         void fakeListen()
         {
-            std::vector<request<action_datatype>>::iterator actions;
+            std::vector<request_t<action_datatype*>>::iterator actions;
             std::cout << "JUGE | setting cannals" << std::endl;
             while (cpt < 40 && in_function && action_stream >> actions)
             {
-                std::cout << "JUGE | checking for actions" << std::endl;
-                if (!(action_stream.empty())) {
-                    int caller = 0;
-                    std::cout << "JUGE | checking fake" << std::endl;
-                    while (actions != action_stream.begin()) {
-                        std::cout << "JUGE | processing fake " << actions - action_stream.begin() << std::endl;
-                        processFake(action_stream.unpack(actions, caller), caller);
-                        cpt++;
-                    }
-                }
-                std::cout << "JUGE | setting cannals" << std::endl;
-                std::this_thread::sleep_for(1000ms);
+                int caller = 0;
+                processAction(action_stream.unpack(actions, caller), caller);
+                cpt++;
             }
-            action_stream.clear();
+            std::this_thread::sleep_for(1000ms);
             scene_ptr->endGame();
         }
 
-        void processFake(action_datatype action, int caller)
+        void processFake(action_datatype* action, int caller)
         {
             std::cout << "Juge received movement " << action << " from " << caller << std::endl;
         }
 
-        void processAction(action_datatype action, int caller) const
+        void processAction(action_datatype* action, int caller) const
         {
-            if (action == -1) scene_ptr->triggerMeow(caller);
-            scene_ptr->updateSelf(std::make_pair(caller, action));
+            std::cout << "JUGE | received action " << *action << " from " << caller << std::endl;
+            if (*action == -1) scene_ptr->triggerMeow(caller);
+            else scene_ptr->updateSelf(std::make_pair(caller, *action));
         }
 
         void close() { in_function = false; }
@@ -206,7 +216,7 @@ namespace carte
         }
 
         Carte() = delete;
-        Carte(unsigned int nb_actor_procs, std::vector<char> grille, MPI_Win* end_o_game_w) : scene{ std::move(grille), end_o_game_w }, juge{ &scene, nb_actor_procs }
+        Carte(unsigned int nb_actor_procs, std::vector<char> grille, MPI_Win* end_o_game_w) : scene{ std::move(grille), end_o_game_w , nb_actor_procs }, juge{ &scene, nb_actor_procs }
         {
             
         }
@@ -218,7 +228,7 @@ namespace carte
 
         void fakeStartGame()
         {
-            juge.fakeListen();
+            juge.listen();
         }
 
     };

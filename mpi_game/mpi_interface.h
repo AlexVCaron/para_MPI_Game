@@ -73,14 +73,17 @@ namespace mpi_interface
 
         if (rang == root_rank) {
             mpi_main_connector<init_payload> connector_carte{};
-            connector_carte.request<canal_direction::_send_all>(i_pl, init_context);
+            std::cout << "lead process sending" << std::endl;
+            connector_carte.request<canal_direction::_send_all>(init_context, &i_pl);
             std::cout << "I am the lead process | c : " << i_pl.canal_carte_tag << " j : " << i_pl.canal_juge_tag << " q_s : " << connector_carte.queue.size() << " |" << std::endl;
         }
         else
         {
             mpi_slave_connector<init_payload> connector_acteur{};
+            std::cout << "slave process receiving" << std::endl;
             connector_acteur.request<canal_direction::_receive_all>(init_context);
-            i_pl = connector_acteur.queue.front();
+            std::cout << "slave process received" << std::endl;
+            i_pl = *(connector_acteur.queue.front());
             std::cout << "I am an actor process #" << rang << " | Hello World !!! | c : " << i_pl.canal_carte_tag << " j : " << i_pl.canal_juge_tag << " q_s : " << connector_acteur.queue.size() << " |" << std::endl;
         }
 

@@ -6,7 +6,7 @@
 #include <cassert>
 
 template<class datatype>
-struct request
+struct request_t
 {
     MPI_Request rq;
     datatype data;
@@ -15,12 +15,12 @@ struct request
 template<class connector_t, class datatype, size_t init_queue_size = 10>
 struct mpi_stream_frame {
 protected:
-    using handles_it = typename std::vector<request<datatype>>::iterator;
+    using handles_it = typename std::vector<request_t<datatype>>::iterator;
     connector_t connector;
-    std::vector<request<datatype>> action_handles{ init_queue_size + 1 };
+    std::vector<request_t<datatype>> action_handles{ init_queue_size + 1 };
     std::vector<unsigned int> action_handles_busy;
     size_t fill;
-    bool completed(typename std::vector<request<datatype>>::iterator req)
+    bool completed(typename std::vector<request_t<datatype>>::iterator req)
     {
         MPI_Status status; int completed = false;
         try {
@@ -40,13 +40,13 @@ public:
 
     }
 
-    typename std::vector<request<datatype>>::iterator begin() { return action_handles.begin(); }
+    typename std::vector<request_t<datatype>>::iterator begin() { return action_handles.begin(); }
 
     void scale(size_t size) { assert(size > action_handles.size()); action_handles.resize(size); action_handles_busy.resize(size, false); }
 
     size_t size() { return action_handles.size(); }
 
-    bool empty() { return fill == 0; }
+    bool empty() { return connector.queue.empty(); }
 
     void clear()
     {
@@ -72,27 +72,19 @@ public:
 
 template<class connector_t, class datatype, size_t init_queue_size = 10>
 struct in_stream : mpi_stream_frame<connector_t, datatype, init_queue_size> {
-    using request_it = typename std::vector<request<datatype>>::iterator;
+    using request_it = typename std::vector<request_t<datatype*>>::iterator;
     explicit in_stream(mpi_driver::mpi_context ct) : mpi_stream_frame{ std::move(ct) } {};
     in_stream& operator>>(request_it& req) {
-        while (fill != action_handles.size() - 1 && completed(action_handles.begin() + fill)) {
-            ++fill;
-            connector.request<canal_direction::_receive>(&(action_handles[fill].rq), context);
-        }
-        req = action_handles.begin();
+        connector.request<canal_direction::_receive>(context);
         return *this;
     }
 
-    datatype unpack(typename std::vector<request<datatype>>::iterator& req, int& caller)
+    datatype* unpack(typename std::vector<request_t<datatype*>>::iterator& req, int& caller)
     {
-        MPI_Status status;
-        if (!completed(req)) MPI_Request_get_status(req->rq, nullptr, &status);
-        req->data = connector.queue.at(req - action_handles.begin());
-        connector.queue.erase(connector.queue.begin() + (req - action_handles.begin()));
-        action_handles_busy[req - action_handles.begin()] = false;
-        --fill;
-        caller = fill + 2;
-        return action_handles[fill + 1].data;
+        caller = context.sender;
+        datatype* dt = connector.queue.front();
+        connector.queue.pop_front();
+        return dt;
     }
 };
 
@@ -100,19 +92,7 @@ template<class connector_t, class datatype, size_t init_queue_size = 10>
 struct a_in_stream : in_stream<connector_t, datatype, init_queue_size> {
     explicit a_in_stream(mpi_driver::mpi_context ct) : in_stream{ std::move(ct) } {};
     a_in_stream& operator>>(request_it& req) {
-        req = action_handles.begin();
-        if (fill == action_handles.size()) fill = 0;
-        while (fill != action_handles.size() - 1) {
-            std::cout << "AC_IN | processing " << fill << std::endl;
-            if (!(action_handles_busy[fill])) {
-                action_handles_busy[fill] = true;
-                //context.target = fill + 1;
-                connector.request<canal_direction::_receive>(&(action_handles[fill].rq), context);
-                if (completed(action_handles.begin() + fill)) req = action_handles.begin() + fill;
-            }
-            if (completed(action_handles.begin() + fill)) req = action_handles.begin() + fill;
-            ++fill;
-        }
+        connector.request<canal_direction::_receive>(context);
         return *this;
     }
 };
@@ -120,11 +100,8 @@ struct a_in_stream : in_stream<connector_t, datatype, init_queue_size> {
 template<class connector_t, class datatype, size_t init_queue_size = 10>
 struct out_stream : mpi_stream_frame<connector_t, datatype, init_queue_size> {
     explicit out_stream(mpi_driver::mpi_context ct) : mpi_stream_frame{ std::move(ct) } {};
-    out_stream& operator<<(datatype mess) {
-        MPI_Request req; MPI_Status status;
-        connector.request<canal_direction::_send>(&req, mess, context);
-        MPI_Wait(&req, &status);
-        if (req != MPI_REQUEST_NULL) MPI_Request_free(&req);
+    out_stream& operator<<(datatype* mess) {
+        connector.request<canal_direction::_send>(context, mess);
         return *this;
     }
 };

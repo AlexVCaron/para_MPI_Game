@@ -25,7 +25,7 @@ class Actor
     struct update_pack { int pos; char val; };
 	using action_datatype = int;
     using update_datatype = update_pack;
-    using update_metatype = int*;
+    using update_metatype = int;
     using update_meta_stream_t = updateStream<in_stream, update_metatype, 1>;
     using update_data_stream_t = updateStream<in_stream, update_datatype, 1>;
 
@@ -51,7 +51,7 @@ public:
 
 	void sendMoveRequest(action_datatype move)
 	{
-        action_stream << move;
+        action_stream << &move;
 	}
 
     void initialize()
@@ -60,10 +60,7 @@ public:
         auto context = mpi_driver::make_mpi_context(MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, MPI_CHAR);
         context.count = 1;
         init_connector i_ct; i_ct.request<canal_direction::_receive>(context);
-        std::cout << "I am an actor requesting role !" << std::endl;
-        char role = i_ct.queue.front();
-        std::cout << "I am an actor, here is my role : ";
-        std::cout << role << std::endl;
+        char role = *(i_ct.queue.front());
         switch (role) {
         case '0':
             std::cout << "I am an actor playing a rat !" << std::endl;
@@ -82,8 +79,7 @@ public:
 	{
         while (!(*end_o_game_flag)) {
             int decision = actor->priseDecision();
-            action_stream << decision;
-            std::cout << "sending message " << decision << std::endl;
+            action_stream << &decision;
             std::this_thread::sleep_for(1000ms);
             update();
         }
@@ -93,14 +89,14 @@ public:
     {
         while (!(*end_o_game_flag)) {
             int decision = actor->priseDecision();
-            action_stream << decision;
-            std::cout << "sending message " << decision << std::endl;
+            action_stream << &decision;
             std::this_thread::sleep_for(1000ms);
+            update();
         }
     }
 
-	void processUpdate(update_datatype update, int count) {
-        std::for_each(&update, &update + count, [&](update_datatype& upd) {
+	void processUpdate(update_datatype* update, int count) {
+        std::for_each(update, update + count, [&](update_datatype& upd) {
             grille[upd.pos] = upd.val;
         });
     }
@@ -116,17 +112,15 @@ public:
         std::cout << "actor getting an update" << std::endl;
         update_m_stream >> m_update;
         std::cout << "actor testing an update" << std::endl;
-        if (!update_m_stream.empty()) {
-            int caller;
-            int* meta = update_m_stream.unpack(m_update, caller);
-            if (meta[0] == -1) processScream();
-            else {
-                update_d_stream.context.count = meta[1];
-                update_d_stream >> d_update;
-                if (!update_d_stream.empty()) {
-                    processUpdate(update_d_stream.unpack(d_update, caller), meta[1]);
-                }
-            }
+        int caller;
+        int* meta = update_m_stream.unpack(m_update, caller);
+        if (meta[0] == -1) processScream();
+        else if (meta[1] > 0) {
+            std::cout << "updating" << std::endl;
+            update_d_stream.context.count = meta[1];
+            update_d_stream >> d_update;
+            std::cout << "got update " << meta[0] << " " << meta[1] << std::endl;
+            processUpdate(update_d_stream.unpack(d_update, caller), meta[1]);
         }
 	}
 
