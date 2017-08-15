@@ -13,6 +13,7 @@ string readFile(const string & fileName)
     ifstream i_f{ fileName };
     fileContent.assign((istreambuf_iterator<char>(i_f)), (istreambuf_iterator<char>()));
     i_f.close();
+    assert(fileContent.size() > 0);
     return fileContent;
 }
 
@@ -37,10 +38,9 @@ void constructMap(const string & text, int& height, int & width, vector<char>& g
 
 std::vector<char> make_grille(string f_name, int& width, int& height)
 {
-    string s = readFile(f_name);
     vector<char> grille{};
-    constructMap(s, height, width, grille);
-    return std::move(grille);
+    constructMap(f_name, height, width, grille);
+    return grille;
 }
 
 int main(int argc, char **argv)
@@ -56,13 +56,13 @@ int main(int argc, char **argv)
     MPI_Win_create(&end_o_game_sig, sizeof(bool), sizeof(bool), info, MPI_COMM_WORLD, &end_o_game_w);
     if(mpi_scope.rang() == 0)
     {
-        carte::Carte ct(mpi_scope.nb_processus() - 1, std::move(grille), width, height, &end_o_game_w);
+        carte::Carte ct(mpi_scope.nb_processus() - 1, grille, width, height, &end_o_game_w);
         ct.initializeActors(mpi_scope.nb_processus() - 1);
         ct.fakeStartGame();
     }
     else
     {
-        Actor actor(std::move(grille), width, height, &end_o_game_sig);
+        Actor actor(grille, width, height, &end_o_game_sig);
         actor.initialize();
         actor.fakeStart();
     }

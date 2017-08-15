@@ -111,17 +111,15 @@ public:
 	{
         update_meta_stream_t::request_it m_update;
         update_data_stream_t::request_it d_update;
-        std::cout << "actor getting an update" << std::endl;
         update_m_stream >> m_update;
-        std::cout << "actor testing an update" << std::endl;
         int caller;
         int* meta = update_m_stream.unpack(m_update, caller);
+        std::cout << "actor testing an update " << meta[0] << " " << meta[1] << std::endl;
         if (meta[0] == -1) processScream();
         else if (meta[1] > 0) {
             std::cout << "updating" << std::endl;
             update_d_stream.context.count = meta[1];
             update_d_stream >> d_update;
-            std::cout << "got update " << meta[0] << " " << meta[1] << std::endl;
             processUpdate(update_d_stream.unpack(d_update, caller), meta[1]);
         }
 	}

@@ -1,0 +1,7 @@
+Carte 0 : Carte blanche pour construire des tests
+Carte 1 : Carte du prof
+Carte 2 : Test si rat mange fromage et condition de victoire du rat
+Carte 3 : Test si chat fait fuir le rat et condirion de victoire du chat
+Carte 4 : Test si chat mange le rat et condition de victoire du chat
+Carte 5 : Test avec tous les tests en meme temps
+Carte 6 : une belle simulation

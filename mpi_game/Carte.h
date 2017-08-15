@@ -46,10 +46,10 @@ namespace carte
             for (size_t i = 0; i < grille.size(); ++i)
             {
                 if (grille[i] == 'C') {
-                    nb_chasseurs++; actor_pos.push_back(i);
+                    ++nb_chasseurs; actor_pos.push_back(i);
                 }
                 else if (grille[i] == 'R') {
-                    nb_rat++; actor_pos.push_front(i);
+                    ++nb_rat; actor_pos.push_front(i);
                 }
                 else if (grille[i] == 'F') nb_fromages++;
             }
@@ -71,7 +71,7 @@ namespace carte
             int cpt = 0;
             for (size_t i = 0; i < grille.size(); i++)
             {
-                if (cpt == width)
+                if (cpt == width - 1)
                 {
                     cpt = 0;
                     cout << "\n" << endl;
@@ -89,6 +89,7 @@ namespace carte
             update_m_stream.context.count = 2;
             countGridElements();
             actor_roles.resize(nb_actors);
+            std::cout << "ended carte cnstr" << std::endl;
         }
 
         void endGame()
@@ -99,7 +100,7 @@ namespace carte
         void removeRat(int caller)
         {
             bool end{ true };
-            if (grille[actor_pos[caller]] == 'R') grille[actor_pos[caller]] = ' ';
+            if (grille[actor_pos[caller - 1]] == 'R') grille[actor_pos[caller - 1]] = ' ';
             --present_rats; if (present_rats == 0) endGame();
             end_o_game_signal.put<MPI_C_BOOL>(true, caller);
         }
@@ -119,8 +120,7 @@ namespace carte
             {
                 char chasseur = '1', rat = '0';
                 char me = (i > nb_rat) ? 'C' : 'R';
-                actor_roles[i] = me;
-                std::cout << "map initializing actor nb " << i << " . It a " << me << "." << std::endl;
+                actor_roles[i - 1] = me;
                 context.target = i;
                 if(i > nb_rat) connector.request<canal_direction::_send>(context, &rat);
                 else connector.request<canal_direction::_send>(context, &chasseur);
@@ -130,7 +130,7 @@ namespace carte
         void triggerMeow(int actor) 
         {
             std::vector<unsigned int> pos;
-            int i_a = actor_pos[actor] % width, j_a = actor_pos[actor] / width;
+            int i_a = actor_pos[actor - 1] % width, j_a = actor_pos[actor - 1] / width;
             for (int i = std::max(0, i_a - 4); i < std::min(width, i_a + 3); ++i) {
                 for (int j = std::max(0, j_a - 4); j < std::min(height, j_a + 3); ++j) {
                     if (grille[i * width + j] == 'R')  pos.push_back(i * width + j);
@@ -139,6 +139,7 @@ namespace carte
             int meta[2] = { -1, 0 };
             std::for_each(pos.begin(), pos.end(), [&](unsigned int pos){
                 update_m_stream.context.target = *(std::find(actor_pos.begin(), actor_pos.end(), pos));
+                std::cout << "sending fear to " << update_m_stream.context.target << std::endl;
                 update_m_stream << &meta[0];
             });
         }
@@ -199,6 +200,7 @@ namespace carte
         void listen()
         {
             std::cout << "JUGE | listening" << std::endl;
+            std::this_thread::sleep_for(1000ms);
             int cpt = nb_actors, cptg = 0;
             std::vector<request_t<action_datatype*>>::iterator actions;
             while (cptg < 2 * nb_actors && in_function && action_stream >> actions)
@@ -247,17 +249,17 @@ namespace carte
             if (*action == -1) scene_ptr->triggerMeow(caller);
             else {
                 if (scene_ptr->grid(*action) == 'M') return false;
-                if (scene_ptr->grid(*action) == '+' && scene_ptr->actor_roles[caller] == 'R') {
+                if (scene_ptr->grid(*action) == '+' && scene_ptr->actor_roles[caller - 1] == 'R') {
                     scene_ptr->removeRat(caller);
                     return false;
                 }
-                if (scene_ptr->grid(*action) == 'F' && scene_ptr->actor_roles[caller] == 'R') {
-                    scene_ptr->eatCheese(scene_ptr->actor_pos[caller]);
+                if (scene_ptr->grid(*action) == 'F' && scene_ptr->actor_roles[caller - 1] == 'R') {
+                    scene_ptr->eatCheese(scene_ptr->actor_pos[caller - 1]);
                 }
-                if (scene_ptr->grid(*action) == 'R' && scene_ptr->actor_roles[caller] == 'C') {
+                if (scene_ptr->grid(*action) == 'R' && scene_ptr->actor_roles[caller - 1] == 'C') {
                     scene_ptr->removeRat(caller);
                 }
-                scene_ptr->updateSelf(std::make_pair(caller, *action));
+                scene_ptr->updateSelf(std::make_pair(caller - 1, *action));
             }
         }
 
