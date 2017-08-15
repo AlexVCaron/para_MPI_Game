@@ -29,42 +29,85 @@ namespace carte
         using update_meta_stream_t = updateStream<out_stream, update_metatype, 1>;
         using update_data_stream_t = updateStream<out_stream, update_datatype, 1>;
 
-        update_meta_stream_t update_m_stream;
-        update_data_stream_t update_d_stream;
+
 
         int nb_actors;
+        mpi_interface::signal_handle end_o_game_signal;
         unsigned int nb_rat = 0, nb_chasseurs = 0, nb_fromages = 0;
         std::vector<datatype> grille; int width; int height;
-        std::vector<unsigned int> actor_pos;
-
-        mpi_interface::signal_handle end_o_game_signal;
+        unsigned int present_rats;
+        
+        update_meta_stream_t update_m_stream;
+        update_data_stream_t update_d_stream;
+        
 
         void countGridElements()
         {
             for (size_t i = 0; i < grille.size(); ++i)
             {
-                if (grille[i] == 'C') nb_chasseurs++;
-                else if (grille[i] == 'R') nb_rat++;
+                if (grille[i] == 'C') {
+                    nb_chasseurs++; actor_pos.push_back(i);
+                }
+                else if (grille[i] == 'R') {
+                    nb_rat++; actor_pos.push_front(i);
+                }
                 else if (grille[i] == 'F') nb_fromages++;
             }
             assert(nb_rat + nb_chasseurs == nb_actors);
+            present_rats = nb_rat;
         }
 
         std::vector<update_pack> updates;
 
     public:
-        Scene(std::vector<datatype>&& grille, MPI_Win* end_o_game_w, int nb_actors) : nb_actors{nb_actors}, end_o_game_signal { end_o_game_w }, nb_rat{ 0 }, nb_chasseurs{ 0 }, nb_fromages{ 0 }, grille{ grille },
-                                                                       update_m_stream(mpi_driver::make_mpi_context(0, 0, MPI_COMM_WORLD, MPI_INT)),
-                                                                       update_d_stream(mpi_driver::make_mpi_context(0, 0, MPI_COMM_WORLD))
+
+        std::vector<char> actor_roles;
+        std::deque<unsigned int> actor_pos;
+
+        char grid(int i) { return grille[i]; }
+
+        void printMap()
+        {
+            int cpt = 0;
+            for (size_t i = 0; i < grille.size(); i++)
+            {
+                if (cpt == width)
+                {
+                    cpt = 0;
+                    cout << "\n" << endl;
+                }
+                cout << grille[i] << endl;
+                cpt++;
+            }
+        }
+
+        Scene(std::vector<datatype>&& grille, int width, int height, MPI_Win* end_o_game_w, int nb_actors) : nb_actors{nb_actors}, end_o_game_signal { end_o_game_w }, nb_rat{ 0 }, nb_chasseurs{ 0 }, nb_fromages{ 0 }, 
+                                                                                                             grille{ grille }, width{ width }, height{ height },
+                                                                                                             update_m_stream(mpi_driver::make_mpi_context(0, 0, MPI_COMM_WORLD, MPI_INT)),
+                                                                                                             update_d_stream(mpi_driver::make_mpi_context(0, 0, MPI_COMM_WORLD))
         {
             update_m_stream.context.count = 2;
             countGridElements();
+            actor_roles.resize(nb_actors);
         }
-
 
         void endGame()
         {
             for (unsigned int i = 1; i < nb_chasseurs + nb_rat; ++i) end_o_game_signal.put<MPI_C_BOOL>(true, i);
+        }
+
+        void removeRat(int caller)
+        {
+            bool end{ true };
+            if (grille[actor_pos[caller]] == 'R') grille[actor_pos[caller]] = ' ';
+            --present_rats; if (present_rats == 0) endGame();
+            end_o_game_signal.put<MPI_C_BOOL>(true, caller);
+        }
+
+        void eatCheese(int position)
+        {
+            if (grille[position] == 'F') grille[position] = ' ';
+            --nb_fromages; if (nb_fromages == 0) endGame();
         }
 
         void assignRoles(unsigned int nb_actor_procs)
@@ -74,11 +117,13 @@ namespace carte
             context.count = 1;
             for (unsigned int i = 1; i <= nb_actor_procs; ++i)
             {
-                std::string me = (i > nb_rat) ? "cat" : "rat";
+                char chasseur = '1', rat = '0';
+                char me = (i > nb_rat) ? 'C' : 'R';
+                actor_roles[i] = me;
                 std::cout << "map initializing actor nb " << i << " . It a " << me << "." << std::endl;
                 context.target = i;
-                if(i > nb_rat) connector.request<canal_direction::_send>(context, '0');
-                else connector.request<canal_direction::_send>(context, '1');
+                if(i > nb_rat) connector.request<canal_direction::_send>(context, &rat);
+                else connector.request<canal_direction::_send>(context, &chasseur);
             }
         }
 
@@ -126,6 +171,7 @@ namespace carte
             update_pack pack_1, pack_2; 
             pack_1.pos = actor_pos[data.first]; pack_1.val = grille[actor_pos[data.first]];
             pack_2.pos = data.second; grille[data.second];
+            actor_pos[data.first] = data.second;
             std::cout << "updating grille" << std::endl;
             updates.push_back(pack_1);
             updates.push_back(pack_2);
@@ -159,9 +205,10 @@ namespace carte
             {
                 if (cpt != 0) {
                     --cpt;
-                    int caller = 0;
+                    int caller = 1000;
                     std::cout << "JUGE | processing an action" << std::endl;
-                    processAction(action_stream.unpack(actions, caller), caller);
+                    action_datatype* action = action_stream.unpack(actions, caller);
+                    processAction(action, caller);
                     cptg++;
                 }
                 else
@@ -193,11 +240,25 @@ namespace carte
             std::cout << "Juge received movement " << action << " from " << caller << std::endl;
         }
 
-        void processAction(action_datatype* action, int caller) const
+        bool processAction(action_datatype* action, int caller) const
         {
             std::cout << "JUGE | received action " << *action << " from " << caller << std::endl;
+            char cnd;
             if (*action == -1) scene_ptr->triggerMeow(caller);
-            else scene_ptr->updateSelf(std::make_pair(caller, *action));
+            else {
+                if (scene_ptr->grid(*action) == 'M') return false;
+                if (scene_ptr->grid(*action) == '+' && scene_ptr->actor_roles[caller] == 'R') {
+                    scene_ptr->removeRat(caller);
+                    return false;
+                }
+                if (scene_ptr->grid(*action) == 'F' && scene_ptr->actor_roles[caller] == 'R') {
+                    scene_ptr->eatCheese(scene_ptr->actor_pos[caller]);
+                }
+                if (scene_ptr->grid(*action) == 'R' && scene_ptr->actor_roles[caller] == 'C') {
+                    scene_ptr->removeRat(caller);
+                }
+                scene_ptr->updateSelf(std::make_pair(caller, *action));
+            }
         }
 
         void close() { in_function = false; }
@@ -216,7 +277,7 @@ namespace carte
         }
 
         Carte() = delete;
-        Carte(unsigned int nb_actor_procs, std::vector<char> grille, MPI_Win* end_o_game_w) : scene{ std::move(grille), end_o_game_w , nb_actor_procs }, juge{ &scene, nb_actor_procs }
+        Carte(unsigned int nb_actor_procs, std::vector<char> grille, int width, int height, MPI_Win* end_o_game_w) : scene{ std::move(grille), width, height, end_o_game_w , nb_actor_procs }, juge{ &scene, nb_actor_procs }
         {
             
         }

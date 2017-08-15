@@ -19,7 +19,7 @@ struct connecteur
     };
 
     template<class direction, class req, class ... Args>
-    void request(req* rq, ct_type& ct, Args&& ... args) {
+    void request(ct_type& ct, Args&& ... args, req* rq) {
         request(direction(), rq, ct, args ...);
     };
 
@@ -34,7 +34,7 @@ private:
     }
 
     template<class direction, class req, class ... Args>
-    void request(direction, req* rq, ct_type& ct, Args&& ... args) {
+    void request(direction, ct_type& ct, Args&& ... args, req* rq) {
         request(direction(), rq, ct, args ...);
     }
 
@@ -50,12 +50,12 @@ private:
     }
 
     template<class req, class ... Args>
-    void request(canal_direction::_receive, req* request, ct_type& ct, Args&& ... args)
+    void request(canal_direction::_receive, ct_type& ct, Args&& ... args)
     {
         queue.push_back(impl().resolve(request, ct, args ...));
     }
     template<class req, class ... Args>
-    void request(canal_direction::_send, req* request, ct_type& ct, Args&& ... args)
+    void request(canal_direction::_send, ct_type& ct, Args&& ... args)
     {
         impl().resolve(request, ct, args ...);
     }
@@ -72,12 +72,12 @@ private:
     }
 
     template<class ... Args>
-    void request(canal_direction::_receive_all, req_type& request, ct_type& ct, Args&& ... args)
+    void request(canal_direction::_receive_all, ct_type& ct, Args&& ... args, req_type& request)
     {
         queue.push_back(impl().resolveAll(request, ct, args ...));
     }
     template<class ... Args>
-    void request(canal_direction::_send_all, req_type& request, ct_type& ct, Args&& ... args)
+    void request(canal_direction::_send_all, ct_type& ct, Args&& ... args, req_type& request)
     {
         impl().resolveAll(request, ct, args ...);
     }

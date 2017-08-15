@@ -23,8 +23,17 @@ namespace mpi_driver
         MPI_Status* status;
         int sender;
         mpi_context() {}
-        mpi_context(mpi_context&& oth) noexcept : datatype{ oth.datatype }, count{ oth.count }, target{ oth.target }, tag{ oth.tag }, comm{ oth.comm }, status{ oth.status } {}
-        mpi_context(mpi_context& oth) : datatype{ oth.datatype }, count{ oth.count }, target{ oth.target }, tag{ oth.tag }, comm{ oth.comm }, status{ oth.status } {}
+        mpi_context(mpi_context&& oth) noexcept : datatype{ oth.datatype }, count{ oth.count }, target{ oth.target }, tag{ oth.tag }, comm{ oth.comm }, status{ oth.status }, sender{ oth.sender } {}
+        mpi_context(mpi_context& oth) : datatype{ oth.datatype }, count{ oth.count }, target{ oth.target }, tag{ oth.tag }, comm{ oth.comm }, status{ oth.status }, sender{ oth.sender } {}
+        mpi_context& operator=(mpi_context oth) { 
+            datatype = oth.datatype;
+            count = oth.count;
+            target = oth.target;
+            tag = oth.tag;
+            comm = oth.comm;
+            status = oth.status;
+            sender = oth.sender;
+        }
     };
 
     template<class mess_type>
@@ -36,20 +45,6 @@ namespace mpi_driver
         using request_type = MPI_Request;
 
         template<class mpi_context_type>
-        message_type resolve(request_type* rq, mpi_context_type& context)
-        {
-            message_type buff = static_cast<message_type>(malloc(sizeof(mess_type) * context.count));
-            MPI_Irecv(buff, context.count, context.datatype, context.target, context.tag, context.comm, rq);
-            return *buff;
-        }
-
-        template<class mpi_context_type, class m_type>
-        void resolve(request_type* rq, mpi_context_type& context, m_type* message)
-        {
-            MPI_Isend(message, context.count, context.datatype, context.target, context.tag, context.comm, rq);
-        }
-
-        template<class mpi_context_type>
         message_type resolve(mpi_context_type& context)
         {
             MPI_Status status; int number_amount;
@@ -57,17 +52,16 @@ namespace mpi_driver
             MPI_Get_count(&status, context.datatype, &number_amount);
             std::cout << "preparing to receive " << number_amount << " from " << status.MPI_SOURCE << std::endl;
             message_type buff = static_cast<message_type>(malloc(sizeof(mess_type) * context.count));
-            MPI_Recv(buff, number_amount, context.datatype, status.MPI_SOURCE, context.tag, context.comm, &status);
             context.sender = status.MPI_SOURCE;
+            MPI_Recv(buff, number_amount, context.datatype, status.MPI_SOURCE, context.tag, context.comm, &status);
             context.count = number_amount;
-            std::cout << "received " << context.count << " from " << context.sender << std::endl;
             return buff;
         }
 
-        template<class mpi_context_type, class m_type>
-        void resolve(mpi_context_type& context, m_type message)
+        template<class mpi_context_type>
+        void resolve(mpi_context_type& context, message_type message)
         {
-            MPI_Send(&message, context.count, context.datatype, context.target, context.tag, context.comm);
+            MPI_Send(message, context.count, context.datatype, context.target, context.tag, context.comm);
         }
 
         template<class mpi_context_type>
@@ -97,13 +91,6 @@ namespace mpi_driver
             message_type *buff = static_cast<message_type*>(malloc(sizeof(message_type) * context.count));
             MPI_Gather(message, 1, context.datatype, buff, 1, context.datatype, context.target, context.comm);
             return buff_resolve(buff, context.count);
-        }
-
-        template<class mpi_context_type, class F>
-        message_type* resolveAll(request_type request, mpi_context_type& context, message_type* message)
-        {
-            MPI_Ibcast(message, context.count, context.datatype, context.target, context.comm, request);
-            return message;
         }
     };
 

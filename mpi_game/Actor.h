@@ -30,6 +30,7 @@ class Actor
     using update_data_stream_t = updateStream<in_stream, update_datatype, 1>;
 
     std::vector<char> grille;
+    int width, height;
 
 	actionStream<out_stream, action_datatype, 10> action_stream;
     update_meta_stream_t update_m_stream;
@@ -41,9 +42,10 @@ class Actor
 
 public:
 
-    Actor(bool* end_o_game_flag) : end_o_game_flag{ end_o_game_flag }, action_stream(mpi_driver::make_mpi_context(0, 0, MPI_COMM_WORLD, MPI_INT)),
-                                                                       update_m_stream(mpi_driver::make_mpi_context(0,0, MPI_COMM_WORLD, MPI_INT)),
-                                                                       update_d_stream(mpi_driver::make_mpi_context(0, 0, MPI_COMM_WORLD))
+    Actor(std::vector<char> grille, int width, int height, bool* end_o_game_flag) : grille{ grille }, width{ width }, height{ height }, 
+                                                                                    action_stream(mpi_driver::make_mpi_context(0, 0, MPI_COMM_WORLD, MPI_INT)),
+                                                                                    update_m_stream(mpi_driver::make_mpi_context(0,0, MPI_COMM_WORLD, MPI_INT)),
+                                                                                    update_d_stream(mpi_driver::make_mpi_context(0, 0, MPI_COMM_WORLD)), end_o_game_flag{ end_o_game_flag }
     { 
         action_stream.context.count = 1;
         update_m_stream.context.count = 2;
