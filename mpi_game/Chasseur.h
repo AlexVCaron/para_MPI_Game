@@ -4,6 +4,8 @@
 
 class Chasseur : public Character
 {
+    int moew_count = 10;
+
     Voisins rechercherChemin(int position, int cible) {
         if (coordX(position) > coordX(cible)) {
             if (position + LEFT == MUR) {
@@ -28,9 +30,11 @@ class Chasseur : public Character
 
     virtual int priseDecision() {
         int posCible = meilleureDistanceCible('R');
-        if (distEuclidienne(position, posCible) < 10) {
+        if (distEuclidienne(position, posCible) < 3 && moew_count == 10) {
+            moew_count = 0;
             return -1;
         }
+        moew_count++;
         return rechercherChemin(position, posCible);
     }
 };

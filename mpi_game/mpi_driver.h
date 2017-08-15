@@ -16,7 +16,7 @@ namespace mpi_driver
     struct mpi_context
     {
         MPI_Datatype datatype;
-        int count;
+        size_t count;
         int target;
         int tag;
         MPI_Comm comm;
@@ -50,8 +50,7 @@ namespace mpi_driver
             MPI_Status status; int number_amount;
             MPI_Probe(context.target, context.tag, context.comm, &status);
             MPI_Get_count(&status, context.datatype, &number_amount);
-            std::cout << "preparing to receive " << number_amount << " from " << status.MPI_SOURCE << std::endl;
-            message_type buff = static_cast<message_type>(malloc(sizeof(mess_type) * context.count));
+            message_type buff = static_cast<message_type>(malloc(sizeof(mess_type) * number_amount));
             context.sender = status.MPI_SOURCE;
             MPI_Recv(buff, number_amount, context.datatype, status.MPI_SOURCE, context.tag, context.comm, &status);
             context.count = number_amount;
@@ -129,14 +128,19 @@ namespace mpi_driver
         }
     };
 
-    template<class ... Args>
-    MPI_Datatype createCustomDatatype(std::vector<int>::iterator counts, Args&& ... t)
+    template<class struc_t, class ... Args>
+    MPI_Datatype createCustomDatatype(struc_t& whole_t, std::vector<int>::iterator counts, Args&& ... t)
     {
         MPI_Datatype obj_type;
         mpi_variables mpi_vars;
-
+        mpi_vars.displacements.push_back(static_cast<MPI_Aint>(0));
         createCustomDatatype(mpi_vars, counts, t ...);
-
+        mpi_vars.displacements.pop_back(); 
+        
+        mpi_vars.displacements.push_back(sizeof(whole_t));
+        mpi_vars.blocks.push_back(1);
+        mpi_vars.types.push_back(MPI_UB);
+        mpi_vars.count++;
         MPI_Type_create_struct(mpi_vars.count, &(*mpi_vars.blocks.begin()), &(*mpi_vars.displacements.begin()), &(*mpi_vars.types.begin()), &obj_type);
         MPI_Type_commit(const_cast<MPI_Datatype*>(&obj_type));
 
@@ -161,15 +165,7 @@ namespace mpi_driver
 
         MPI_Aint intex, intlb;
         MPI_Type_get_extent(a, &intlb, &intex);
-
-        if (mpi_vars.count == 1)
-        {
-            mpi_vars.displacements.push_back(static_cast<MPI_Aint>(0));
-        }
-        else
-        {
-            mpi_vars.displacements.push_back(mpi_vars.displacements.back() + intex);
-        }
+        mpi_vars.displacements.push_back(mpi_vars.displacements.back() + intex);
     }
 
     template<class message_type>

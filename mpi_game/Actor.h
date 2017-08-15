@@ -65,11 +65,11 @@ public:
         char role = *(i_ct.queue.front());
         switch (role) {
         case '0':
-            std::cout << "I am an actor playing a rat !" << std::endl;
+            std::cout << "ACTR | I am an actor playing a rat !" << std::endl;
             actor = new Rat();
             break;
         case '1':
-            std::cout << "I am an actor playing a cat !" << std::endl;
+            std::cout << "ACTR | I am an actor playing a cat !" << std::endl;
             actor = new Chasseur();
             break;
         default:
@@ -82,28 +82,20 @@ public:
         while (!(*end_o_game_flag)) {
             int decision = actor->priseDecision();
             action_stream << &decision;
-            std::this_thread::sleep_for(1000ms);
             update();
         }
 	}
 
-    void fakeStart()
-    {
-        while (!(*end_o_game_flag)) {
-            int decision = actor->priseDecision();
-            action_stream << &decision;
-            std::this_thread::sleep_for(1000ms);
-            update();
-        }
-    }
-
 	void processUpdate(update_datatype* update, int count) {
-        std::for_each(update, update + count, [&](update_datatype& upd) {
-            grille[upd.pos] = upd.val;
+        std::for_each(update, update + count - 1, [&](update_datatype& upd) {
+            if(upd.pos < grille.size())
+                grille[upd.pos] = upd.val;
         });
+        if (update[count - 1].val == 'T') processScream();
     }
 
     void processScream() {
+        std::cout << "ACTR | fearing !" << std::endl;
         actor->raiseInFear();
     }
 
@@ -114,13 +106,11 @@ public:
         update_m_stream >> m_update;
         int caller;
         int* meta = update_m_stream.unpack(m_update, caller);
-        std::cout << "actor testing an update " << meta[0] << " " << meta[1] << std::endl;
-        if (meta[0] == -1) processScream();
-        else if (meta[1] > 0) {
-            std::cout << "updating" << std::endl;
+        if (meta[1] > 0) {
             update_d_stream.context.count = meta[1];
             update_d_stream >> d_update;
-            processUpdate(update_d_stream.unpack(d_update, caller), meta[1]);
+            update_pack* upd = update_d_stream.unpack(d_update, caller);
+            processUpdate(upd, update_d_stream.context.count);
         }
 	}
 

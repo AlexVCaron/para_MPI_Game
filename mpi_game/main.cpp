@@ -64,7 +64,7 @@ int main(int argc, char **argv)
     {
         Actor actor(grille, width, height, &end_o_game_sig);
         actor.initialize();
-        actor.fakeStart();
+        actor.start();
     }
     MPI_Info_free(&info);
     MPI_Win_free(&end_o_game_w);

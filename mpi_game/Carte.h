@@ -23,7 +23,14 @@ namespace carte
 
     class Scene
     {
-        struct update_pack { int pos; char val; };
+        struct update_pack
+        {
+            int pos; char val; 
+            update_pack() { }
+            update_pack(const update_pack& oth) : pos{ oth.pos }, val{ oth.val } { }
+            update_pack(const update_pack&& oth) noexcept : pos{ oth.pos }, val{ oth.val } { }
+            update_pack& operator=(const update_pack& oth) { pos = oth.pos; val = oth.val; return *this; }
+        };
         using update_datatype = update_pack;
         using update_metatype = int;
         using update_meta_stream_t = updateStream<out_stream, update_metatype, 1>;
@@ -63,6 +70,7 @@ namespace carte
 
         std::vector<char> actor_roles;
         std::deque<unsigned int> actor_pos;
+        std::vector<bool> actor_fear;
 
         char grid(int i) { return grille[i]; }
 
@@ -71,14 +79,15 @@ namespace carte
             int cpt = 0;
             for (size_t i = 0; i < grille.size(); i++)
             {
-                if (cpt == width - 1)
+                if (cpt == width)
                 {
                     cpt = 0;
-                    cout << "\n" << endl;
+                    cout << endl;
                 }
-                cout << grille[i] << endl;
+                cout << grille[i];
                 cpt++;
             }
+            cout << endl;
         }
 
         Scene(std::vector<datatype>&& grille, int width, int height, MPI_Win* end_o_game_w, int nb_actors) : nb_actors{nb_actors}, end_o_game_signal { end_o_game_w }, nb_rat{ 0 }, nb_chasseurs{ 0 }, nb_fromages{ 0 }, 
@@ -89,7 +98,7 @@ namespace carte
             update_m_stream.context.count = 2;
             countGridElements();
             actor_roles.resize(nb_actors);
-            std::cout << "ended carte cnstr" << std::endl;
+            actor_fear.resize(nb_actors);
         }
 
         void endGame()
@@ -122,60 +131,63 @@ namespace carte
                 char me = (i > nb_rat) ? 'C' : 'R';
                 actor_roles[i - 1] = me;
                 context.target = i;
-                if(i > nb_rat) connector.request<canal_direction::_send>(context, &rat);
+                if(i <= nb_rat) connector.request<canal_direction::_send>(context, &rat);
                 else connector.request<canal_direction::_send>(context, &chasseur);
             }
         }
 
         void triggerMeow(int actor) 
         {
-            std::vector<unsigned int> pos;
-            int i_a = actor_pos[actor - 1] % width, j_a = actor_pos[actor - 1] / width;
-            for (int i = std::max(0, i_a - 4); i < std::min(width, i_a + 3); ++i) {
-                for (int j = std::max(0, j_a - 4); j < std::min(height, j_a + 3); ++j) {
-                    if (grille[i * width + j] == 'R')  pos.push_back(i * width + j);
+            std::cout << "SCEN | triggering moew of actor " << actor << std::endl;
+            for (int i = 0; i < nb_rat + nb_chasseurs; ++i)
+            {
+                if(actor_roles[i] == 'R' && abs(int(actor_pos[i]) - int(actor_pos[actor - 1])) < 3)
+                {
+                    std::cout << "sCEN | somebody will fear" << std::endl;
+                    actor_fear[i] = true;
                 }
             }
-            int meta[2] = { -1, 0 };
-            std::for_each(pos.begin(), pos.end(), [&](unsigned int pos){
-                update_m_stream.context.target = *(std::find(actor_pos.begin(), actor_pos.end(), pos));
-                std::cout << "sending fear to " << update_m_stream.context.target << std::endl;
-                update_m_stream << &meta[0];
-            });
         }
 
         void propagateUpdate()
         {
-            int meta[2] = { 1 , int(updates.size()) };
-            update_d_stream.context.count = updates.size();
-            update_pack* buff = static_cast<update_pack*>(malloc(sizeof(update_pack) * updates.size()));
-            std::cout << "SCEN | creating update" << std::endl;
+            int meta[2]; meta[0] = 1; meta[1] = updates.size() + 1;
+            update_d_stream.context.count = updates.size() + 1;
+            update_m_stream.context.count = 2;
+            update_pack* buff = static_cast<update_pack*>(malloc(sizeof(update_pack) * (updates.size() + 1)));
             for (int i = 0; i < updates.size(); ++i)
             {
                 buff[i] = updates[i];
             }
-            std::cout << "SCEN | end creating update" << std::endl;
-            std::cout << "SCEN | gotta send meta " << meta[0] << " " << meta[1] << std::endl;
+            buff[updates.size()].pos = -1; buff[updates.size()].val = 'F';
             for (int i = 1; i <= nb_chasseurs + nb_rat; ++i) {
-                std::cout << "SCEN | sending to " << i << std::endl;
+                if(actor_fear[i - 1])
+                {
+                    std::cout << "SCEN | actor " << i << " will be afraid" << std::endl;
+                    buff[updates.size()].val = 'T';
+                    actor_fear[i - 1] = false;
+                }
                 update_m_stream.context.target = i;
                 update_d_stream.context.target = i;
-                update_m_stream << &meta[0];
-                if(meta[1] > 0) update_d_stream << &buff[0];
+                update_m_stream << meta;
+                if(meta[1] > 0) update_d_stream << buff;
             }
+            updates.clear();
             free(buff);
         }
 
         void updateSelf(std::pair<int,action_datatype> data)
         {
-            std::swap(grille[actor_pos[data.first]], grille[data.second]);
+            char tmp = grille[actor_pos[data.first]];
+            grille[actor_pos[data.first]] = grille[data.second];
+            grille[data.second] = tmp;
             update_pack pack_1, pack_2; 
             pack_1.pos = actor_pos[data.first]; pack_1.val = grille[actor_pos[data.first]];
-            pack_2.pos = data.second; grille[data.second];
+            pack_2.pos = data.second; pack_2.val = grille[data.second];
             actor_pos[data.first] = data.second;
-            std::cout << "updating grille" << std::endl;
             updates.push_back(pack_1);
             updates.push_back(pack_2);
+            printMap();
         }
     };
 
@@ -200,22 +212,15 @@ namespace carte
         void listen()
         {
             std::cout << "JUGE | listening" << std::endl;
-            std::this_thread::sleep_for(1000ms);
             int cpt = nb_actors, cptg = 0;
             std::vector<request_t<action_datatype*>>::iterator actions;
-            while (cptg < 2 * nb_actors && in_function && action_stream >> actions)
+            while (in_function && action_stream >> actions)
             {
-                if (cpt != 0) {
-                    --cpt;
-                    int caller = 1000;
-                    std::cout << "JUGE | processing an action" << std::endl;
-                    action_datatype* action = action_stream.unpack(actions, caller);
-                    processAction(action, caller);
-                    cptg++;
-                }
-                else
-                {
-                    std::this_thread::sleep_for(1000ms);
+                --cpt;
+                int caller = 1000;
+                action_datatype* action = action_stream.unpack(actions, caller);
+                processAction(action, caller);
+                if (cpt == 0) {
                     cpt = nb_actors;
                     scene_ptr->propagateUpdate();
                 }
@@ -226,7 +231,6 @@ namespace carte
         void fakeListen()
         {
             std::vector<request_t<action_datatype*>>::iterator actions;
-            std::cout << "JUGE | setting cannals" << std::endl;
             while (cpt < 40 && in_function && action_stream >> actions)
             {
                 int caller = 0;
@@ -239,19 +243,23 @@ namespace carte
 
         void processFake(action_datatype* action, int caller)
         {
-            std::cout << "Juge received movement " << action << " from " << caller << std::endl;
         }
 
         bool processAction(action_datatype* action, int caller) const
         {
-            std::cout << "JUGE | received action " << *action << " from " << caller << std::endl;
             char cnd;
-            if (*action == -1) scene_ptr->triggerMeow(caller);
+            if (*action == -1) {
+                scene_ptr->triggerMeow(caller);
+                return false;
+            }
             else {
-                if (scene_ptr->grid(*action) == 'M') return false;
+                if (scene_ptr->grid(*action) == '#') {
+                    std::cout << "JUGE | actor " << caller << " walling" << std::endl;
+                    return false;
+                }
                 if (scene_ptr->grid(*action) == '+' && scene_ptr->actor_roles[caller - 1] == 'R') {
                     scene_ptr->removeRat(caller);
-                    return false;
+                    return true;
                 }
                 if (scene_ptr->grid(*action) == 'F' && scene_ptr->actor_roles[caller - 1] == 'R') {
                     scene_ptr->eatCheese(scene_ptr->actor_pos[caller - 1]);

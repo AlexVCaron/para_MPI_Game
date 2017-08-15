@@ -60,11 +60,10 @@ namespace mpi_interface
 
     inline void realizeInitHandshake(const int rang)
     {
-        std::vector<int> blocks{ 1,1,1 }; auto it = blocks.begin();
-        MPI_Datatype datatype = mpi_driver::createCustomDatatype(it, MPI_INT, MPI_INT, MPI_INT);
-
         init_payload i_pl;
 
+        std::vector<int> blocks{ 1,1,1 }; auto it = blocks.begin();
+        MPI_Datatype datatype = mpi_driver::createCustomDatatype(i_pl, it, MPI_INT, MPI_INT, MPI_INT);
         
         auto init_context(mpi_driver::make_mpi_context(
             0, 0, MPI_COMM_WORLD, datatype
