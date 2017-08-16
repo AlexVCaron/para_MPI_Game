@@ -65,11 +65,11 @@ public:
         int position = *(i_ct.queue.front());
         switch (grille[position]) {
         case 'R':
-            std::cout << "ACTR | I am an actor playing a rat !" << std::endl;
+            std::cout << "| I am an actor playing a rat !" << std::endl;
             actor = new Rat(&grille, width, height, position);
             break;
         case 'C':
-            std::cout << "ACTR | I am an actor playing a cat !" << std::endl;
+            std::cout << "| I am an actor playing a cat !" << std::endl;
             actor = new Chasseur(&grille, width, height, position);
             break;
         default:
@@ -100,7 +100,6 @@ public:
     }
 
     void processScream() const {
-        std::cout << "ACTR | fearing !" << std::endl;
         actor->raiseInFear();
     }
 

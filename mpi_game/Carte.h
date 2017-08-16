@@ -95,8 +95,8 @@ namespace carte
                                                                                                              update_m_stream(mpi_driver::make_mpi_context(0, 0, MPI_COMM_WORLD, MPI_INT)),
                                                                                                              update_d_stream(mpi_driver::make_mpi_context(0, 0, MPI_COMM_WORLD))
         {
-            std::cout << "CART | taille totale " << grille.size() << std::endl;
-            std::cout << width << " " << height << std::endl;
+            std::cout << "Taille totale du vecteur carte : " << grille.size() << std::endl;
+            std::cout << "Largeur : " << width << " | Hauteur : " << height << std::endl;
             update_m_stream.context.count = 2;
             countGridElements();
             actor_roles.resize(nb_actors);
@@ -176,8 +176,6 @@ namespace carte
 
         void updateSelf(std::pair<int,action_datatype> data)
         {
-            std::cout << "SCEN | " << actor_pos[data.first] << " " << data.second << std::endl;
-
             char tmp = grille[actor_pos[data.first]];
             grille[actor_pos[data.first]] = grille[data.second];
             grille[data.second] = tmp;

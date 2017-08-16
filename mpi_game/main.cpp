@@ -47,9 +47,12 @@ int main(int argc, char **argv)
 {
     int width = 1000, height = 0;
     mpi_interface::MPI_Scope mpi_scope(argc, argv);
+    if (mpi_scope.rang() == 0) {
+        std::cout << "+-------------------------" << std::endl;
+        std::cout << "| HANDSHAKING" << std::endl;
+    }
     mpi_interface::realizeInitHandshake(mpi_scope.rang());
     std::vector<char> grille = make_grille(argv[1], width, height);
-    std::cout << "got grille " << width << " " << height << std::endl;
     bool end_o_game_sig = false;
     MPI_Info info;
     MPI_Info_create(&info);
@@ -57,17 +60,26 @@ int main(int argc, char **argv)
     MPI_Win_create(&end_o_game_sig, sizeof(bool), sizeof(bool), info, MPI_COMM_WORLD, &end_o_game_w);
     if(mpi_scope.rang() == 0)
     {
+        std::cout << "+------------------------+" << std::endl;
+        std::cout << "| Grille                 |" << std::endl;
+        std::cout << "+------------------------+" << std::endl;
         carte::Carte ct(mpi_scope.nb_processus() - 1, grille, width, height, &end_o_game_w);
-        std::cout << "carte init" << std::endl;
+        std::cout << "+------------------------+" << std::endl;
+        std::cout << "| Phase d'initialisation |" << std::endl;
+        std::cout << "+------------------------+" << std::endl;
         ct.initializeActors(mpi_scope.nb_processus() - 1);
-        std::cout << "c_actors init" << std::endl;
-        ct.fakeStartGame();
+        std::cout << "+-------------------------" << std::endl;
+        std::cout << "| Debut de la partie" << std::endl;
+        MPI_Barrier(MPI_COMM_WORLD);
+        ct.startGame();
+        std::cout << "| Fin de la partie      " << std::endl;
+        std::cout << "+-------------------------" << std::endl;
     }
     else
     {
         Actor actor(grille, width, height, &end_o_game_sig);
         actor.initialize();
-        std::cout << "actors init" << std::endl;
+        MPI_Barrier(MPI_COMM_WORLD);
         actor.start();
     }
     MPI_Info_free(&info);

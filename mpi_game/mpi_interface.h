@@ -53,9 +53,9 @@ namespace mpi_interface
 
     struct init_payload
     {
-        int canal_juge_tag = 0;
-        int canal_carte_tag = 1;
-        int actor_rank = -1;
+        int canal_juge_tag;
+        int canal_carte_tag;
+        int actor_rank;
     };
 
     inline void realizeInitHandshake(const int rang)
@@ -69,12 +69,13 @@ namespace mpi_interface
             0, 0, MPI_COMM_WORLD, datatype
             ));
         init_context.count = 1;
-
+        
+        
         if (rang == root_rank) {
             mpi_main_connector<init_payload> connector_carte{};
+            i_pl.canal_juge_tag = 0; i_pl.canal_carte_tag = 1;
             std::cout << "lead process sending" << std::endl;
             connector_carte.request<canal_direction::_send_all>(init_context, &i_pl);
-            std::cout << "I am the lead process | c : " << i_pl.canal_carte_tag << " j : " << i_pl.canal_juge_tag << " q_s : " << connector_carte.queue.size() << " |" << std::endl;
         }
         else
         {
@@ -83,7 +84,16 @@ namespace mpi_interface
             connector_acteur.request<canal_direction::_receive_all>(init_context);
             std::cout << "slave process received" << std::endl;
             i_pl = *(connector_acteur.queue.front());
-            std::cout << "I am an actor process #" << rang << " | Hello World !!! | c : " << i_pl.canal_carte_tag << " j : " << i_pl.canal_juge_tag << " q_s : " << connector_acteur.queue.size() << " |" << std::endl;
+            
+        }
+
+        if(rang == root_rank)
+        {
+            std::cout << "| Hello World !!! | I am the lead process    | carte_canal : " << i_pl.canal_carte_tag << " juge_canal : " << i_pl.canal_juge_tag << " |" << std::endl;
+        }
+        else
+        {
+            std::cout << "| Hello World !!! | I am an actor process #" << rang << " | carte_canal : " << i_pl.canal_carte_tag << " juge_canal : " << i_pl.canal_juge_tag << " |" << std::endl;
         }
 
         MPI_Type_free(&datatype);

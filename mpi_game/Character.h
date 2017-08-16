@@ -94,10 +94,8 @@ protected:
         int g_i = coordX(goal), g_j = coordY(goal);
         std::vector<node> o_list;
         std::vector<node> c_list;
-        std::cout << position << std::endl;
         o_list.emplace_back(position / width, position % width);
         o_list.front().h = distEuclidienne(position, goal);
-        std::cout << o_list.front().i << " " << o_list.front().j << std::endl;
         while(!o_list.empty())
         {
             std::vector<node>::iterator q_it;
