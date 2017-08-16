@@ -11,7 +11,7 @@ struct updateStream : stream_type<mpi_interface::mpi_main_connector<datatype>, d
 
     updateStream(mpi_driver::mpi_context&& ct) : stream_type<update_connector, datatype, init_queue_size>(std::move(ct)) {
         std::vector<int> counts{ 1,1 }; datatype dt;
-        context.datatype = mpi_driver::createCustomDatatype(dt, counts.begin(), MPI_INT, MPI_CHAR);
+        context.datatype = mpi_driver::createCustomDatatype(dt, counts.begin(), MPI_INT, MPI_INT);
     }
 
     ~updateStream() {

@@ -25,11 +25,11 @@ namespace carte
     {
         struct update_pack
         {
-            int pos; char val; 
+            int posA; int posB; 
             update_pack() { }
-            update_pack(const update_pack& oth) : pos{ oth.pos }, val{ oth.val } { }
-            update_pack(const update_pack&& oth) noexcept : pos{ oth.pos }, val{ oth.val } { }
-            update_pack& operator=(const update_pack& oth) { pos = oth.pos; val = oth.val; return *this; }
+            update_pack(const update_pack& oth) : posA{ oth.posA }, posB{ oth.posB } { }
+            update_pack(const update_pack&& oth) noexcept : posA{ oth.posA }, posB{ oth.posB } { }
+            update_pack& operator=(const update_pack& oth) { posA = oth.posA; posB = oth.posB; return *this; }
         };
         using update_datatype = update_pack;
         using update_metatype = int;
@@ -95,10 +95,13 @@ namespace carte
                                                                                                              update_m_stream(mpi_driver::make_mpi_context(0, 0, MPI_COMM_WORLD, MPI_INT)),
                                                                                                              update_d_stream(mpi_driver::make_mpi_context(0, 0, MPI_COMM_WORLD))
         {
+            std::cout << "CART | taille totale " << grille.size() << std::endl;
+            std::cout << width << " " << height << std::endl;
             update_m_stream.context.count = 2;
             countGridElements();
             actor_roles.resize(nb_actors);
             actor_fear.resize(nb_actors);
+            printMap();
         }
 
         void endGame()
@@ -122,28 +125,24 @@ namespace carte
 
         void assignRoles(unsigned int nb_actor_procs)
         {
-            mpi_interface::mpi_main_connector<char> connector;
-            auto context = mpi_driver::make_mpi_context(MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, MPI_CHAR);
+            mpi_interface::mpi_main_connector<int> connector;
+            auto context = mpi_driver::make_mpi_context(MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, MPI_INT);
             context.count = 1;
             for (unsigned int i = 1; i <= nb_actor_procs; ++i)
             {
-                char chasseur = '1', rat = '0';
-                char me = (i > nb_rat) ? 'C' : 'R';
-                actor_roles[i - 1] = me;
+                int pos = actor_pos[i - 1];
                 context.target = i;
-                if(i <= nb_rat) connector.request<canal_direction::_send>(context, &rat);
-                else connector.request<canal_direction::_send>(context, &chasseur);
+                actor_roles[i - 1] = grille[pos];
+                connector.request<canal_direction::_send>(context, &pos);
             }
         }
 
         void triggerMeow(int actor) 
         {
-            std::cout << "SCEN | triggering moew of actor " << actor << std::endl;
             for (int i = 0; i < nb_rat + nb_chasseurs; ++i)
             {
-                if(actor_roles[i] == 'R' && abs(int(actor_pos[i]) - int(actor_pos[actor - 1])) < 3)
+                if(actor_roles[i] == 'R' && abs(int(actor_pos[i]) - int(actor_pos[actor - 1])) <= 3)
                 {
-                    std::cout << "sCEN | somebody will fear" << std::endl;
                     actor_fear[i] = true;
                 }
             }
@@ -159,12 +158,11 @@ namespace carte
             {
                 buff[i] = updates[i];
             }
-            buff[updates.size()].pos = -1; buff[updates.size()].val = 'F';
+            buff[updates.size()].posA = -1; buff[updates.size()].posB = 0;
             for (int i = 1; i <= nb_chasseurs + nb_rat; ++i) {
                 if(actor_fear[i - 1])
                 {
-                    std::cout << "SCEN | actor " << i << " will be afraid" << std::endl;
-                    buff[updates.size()].val = 'T';
+                    buff[updates.size()].posB = 1;
                     actor_fear[i - 1] = false;
                 }
                 update_m_stream.context.target = i;
@@ -178,15 +176,20 @@ namespace carte
 
         void updateSelf(std::pair<int,action_datatype> data)
         {
+            std::cout << "SCEN | " << actor_pos[data.first] << " " << data.second << std::endl;
+
             char tmp = grille[actor_pos[data.first]];
             grille[actor_pos[data.first]] = grille[data.second];
             grille[data.second] = tmp;
-            update_pack pack_1, pack_2; 
-            pack_1.pos = actor_pos[data.first]; pack_1.val = grille[actor_pos[data.first]];
-            pack_2.pos = data.second; pack_2.val = grille[data.second];
+
+
+            update_pack pack_1;
+            pack_1.posA = actor_pos[data.first]; pack_1.posB = data.second;
+
             actor_pos[data.first] = data.second;
+
             updates.push_back(pack_1);
-            updates.push_back(pack_2);
+
             printMap();
         }
     };
@@ -211,10 +214,9 @@ namespace carte
 
         void listen()
         {
-            std::cout << "JUGE | listening" << std::endl;
             int cpt = nb_actors, cptg = 0;
             std::vector<request_t<action_datatype*>>::iterator actions;
-            while (in_function && action_stream >> actions)
+            while (cptg == 5 || (in_function && action_stream >> actions))
             {
                 --cpt;
                 int caller = 1000;
@@ -223,6 +225,7 @@ namespace carte
                 if (cpt == 0) {
                     cpt = nb_actors;
                     scene_ptr->propagateUpdate();
+                    cptg++;
                 }
             }
             scene_ptr->endGame();
@@ -254,7 +257,6 @@ namespace carte
             }
             else {
                 if (scene_ptr->grid(*action) == '#') {
-                    std::cout << "JUGE | actor " << caller << " walling" << std::endl;
                     return false;
                 }
                 if (scene_ptr->grid(*action) == '+' && scene_ptr->actor_roles[caller - 1] == 'R') {

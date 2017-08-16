@@ -45,10 +45,11 @@ std::vector<char> make_grille(string f_name, int& width, int& height)
 
 int main(int argc, char **argv)
 {
-    int width, height;
+    int width = 1000, height = 0;
     mpi_interface::MPI_Scope mpi_scope(argc, argv);
     mpi_interface::realizeInitHandshake(mpi_scope.rang());
     std::vector<char> grille = make_grille(argv[1], width, height);
+    std::cout << "got grille " << width << " " << height << std::endl;
     bool end_o_game_sig = false;
     MPI_Info info;
     MPI_Info_create(&info);
@@ -57,13 +58,16 @@ int main(int argc, char **argv)
     if(mpi_scope.rang() == 0)
     {
         carte::Carte ct(mpi_scope.nb_processus() - 1, grille, width, height, &end_o_game_w);
+        std::cout << "carte init" << std::endl;
         ct.initializeActors(mpi_scope.nb_processus() - 1);
+        std::cout << "c_actors init" << std::endl;
         ct.fakeStartGame();
     }
     else
     {
         Actor actor(grille, width, height, &end_o_game_sig);
         actor.initialize();
+        std::cout << "actors init" << std::endl;
         actor.start();
     }
     MPI_Info_free(&info);

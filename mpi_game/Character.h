@@ -3,30 +3,23 @@
 
 class Character
 {
+    virtual std::vector<std::pair<int, int>> createVoisinsOps() {
+        return std::vector<std::pair<int, int>>();
+    }
+    virtual bool canMove(char entity) { return false; }
 protected:
     const char MUR = '#';
 
-    enum Voisins {
-        DOWN = 0,
-        UP = 1,
-        LEFT = 2,
-        RIGHT = 3,
-        DIAG_UP_RIGHT = 4,
-        DIAG_UP_LEFT = 5,
-        DIAG_DOWN_RIGHT = 6,
-        DIAG_DOWN_LEFT = 7
-    };
-
-    std::vector<char> grille;
+    std::vector<char>* grille;
     int width, height;
     int fearLevel = 0;
-    unsigned int position;
+    
 public:
     virtual int priseDecision() { return -2; }
-
+    unsigned int position;
     void raiseInFear() { fearLevel = 5; }
 
-    Character() {}
+    Character(std::vector<char>* grille_p, int width, int height, unsigned int position) : grille(grille_p), width{ width }, height{ height }, position{ position } {}
 
     Character(Character&& oth) : grille{ oth.grille },
         width{ oth.width },
@@ -42,100 +35,132 @@ public:
     }
 protected:
 
+
+
     // A*
-    /*
+    
     struct node
     {
         node* parent = nullptr;
         int i,  j;
-        float f = 0, g, h;
+        float f = 0, g=0, h=0;
         node(int i, int j) : i{i}, j{j} {}
+        node(std::pair<int,int> coords) : i{ coords.first }, j{ coords.second } {}
+        node(std::pair<int, int> coords, node* parent) : parent{ parent }, i { coords.first }, j{ coords.second } {}
         node(int i, int j, node* parent) : parent{ parent }, i{ i }, j{ j } {}
+        node(const node& oth) : parent{ oth.parent }, i{ oth.i }, j{ oth.j }, f{ oth.f }, g{ oth.g }, h { oth.h } {}
+        node(const node&& oth) noexcept : parent{ oth.parent }, i{ oth.i }, j{ oth.j }, f{ oth.f }, g{ oth.g }, h{ oth.h } {}
+        node& operator=(const node& oth) {
+            parent = oth.parent;
+            i = oth.i; j = oth.j;
+            f = oth.f; g = oth.g; h = oth.h;
+            return *this;
+        }
     };
 
-    void insertNode(std::vector<node>& nodes, node& i_node)
+    int linear(int i, int j)
     {
-        insertNode(nodes, i_node, nodes.begin(), nodes.end(), nodes.begin() + nodes.size() / 2);
+        return i * width + j;
     }
 
-    void insertNode(std::vector<node>& nodes, node& i_node, std::vector<node>::iterator beg, std::vector<node>::iterator end, std::vector<node>::iterator hint)
-    {
-        if ((end - hint) == 0 && (hint - beg) == 0) nodes.insert(hint, i_node);
-        else if (hint->f > i_node.f) insertNode(nodes, i_node, hint, end, hint + (end - hint) / 2);
-        else if (hint->f < i_node.f) insertNode(nodes, i_node, beg, hint, hint + (hint - beg) / 2);
-        else nodes.insert(hint, i_node);
-    }
 
-    node& findNode(std::vector<node>& nodes, float f, std::vector<node>::iterator hint)
-    {
-        return findNode(nodes, f, nodes.begin(), nodes.end(), hint);
-    }
 
-    node& findNode(std::vector<node>& nodes, float f, std::vector<node>::iterator beg, std::vector<node>::iterator end, std::vector<node>::iterator hint)
+    std::vector<node> fetchNeigs(node* parent)
     {
-        if ((end - hint) == 0 && (hint - beg) == 0) return *hint;
-        if (hint->f < f) findNode(nodes, f, hint, end, hint + (end - hint) / 2);
-        else if (hint->f > f) findNode(nodes, f, beg, hint, hint + (hint - beg) / 2);
-        return *hint;
-    }
-
-    float findNodeIJ(std::vector<node>& nodes, int i, int j)
-    {
-        std::vector<node>::iterator fn = std::find_if(nodes.begin(), nodes.end(), [&](node& nd)
+        std::vector<node> voisins;
+        auto voisin_ops = createVoisinsOps();
+        for_each(voisin_ops.begin(), voisin_ops.end(), [&](auto op)
         {
-            return nd.i == i && nd.j == j;
+            int  i = parent->i + op.first, j = parent->j + op.second;
+            int pt = linear(i, j);
+            if(i >= 0 && i < height && j >= 0 && j < width)
+            {
+                if (canMove((*grille)[pt])) {
+                    voisins.emplace_back(i, j, parent);
+                }
+            }
         });
-        if (fn == nodes.end()) return -1;
-        else return fn->f;
+        return std::move(voisins);
     }
 
-    int searchBestPath(unsigned int goal)
-    {
-        int g_i = goal % width, g_j = goal / width;
+    struct {
+        bool operator() (node& a, node& b) {
+            return a.f < b.f;
+        }
+    } lowest_node;
 
+    node searchBestPath(int goal)
+    {
+        int g_i = coordX(goal), g_j = coordY(goal);
         std::vector<node> o_list;
         std::vector<node> c_list;
-        o_list.emplace_back(position % width, position / width);
+        std::cout << position << std::endl;
+        o_list.emplace_back(position / width, position % width);
+        o_list.front().h = distEuclidienne(position, goal);
+        std::cout << o_list.front().i << " " << o_list.front().j << std::endl;
         while(!o_list.empty())
         {
-            node q = o_list.back(); o_list.pop_back();
-            if(q.i + 1 < width)
+            std::vector<node>::iterator q_it;
+            if (o_list.size() > 1) {
+                q_it = std::min_element(o_list.begin(), o_list.end(), lowest_node);
+            } else q_it = o_list.begin();
+            int q_pos = q_it - o_list.begin();
+            node q{ *q_it };
+            std::vector<node> neigs = fetchNeigs(&q);
+            auto neig_it = find_if(neigs.begin(), neigs.end(), [&](node& vs)
             {
-                if (q.i + 1 == g_i && q.j == g_j) break;
-                auto n_o = findNodeIJ(o_list, q.i + 1, q.j), n_c = findNodeIJ(c_list, q.i + 1, q.j);
-                if(n_o != -1.f && n_o > )
-            }
+                int lin_pos = linear(vs.i, vs.j);
+                if (lin_pos == goal) return true;
+                vs.g = q.g + 1;
+                vs.h = distEuclidienne(lin_pos, goal);
+                vs.f = vs.g + vs.h;
+                auto lower_o = find_if(o_list.begin(), o_list.end(), [&](node& o_el)
+                {
+                    return linear(o_el.i, o_el.j) == lin_pos && o_el.f < vs.f;
+                });
+                auto lower_c = find_if(c_list.begin(), c_list.end(), [&](node& c_el)
+                {
+                    return linear(c_el.i, c_el.j) == lin_pos && c_el.f < vs.f;
+                });
+                if (lower_c == c_list.end() && lower_o == o_list.end()) {
+                    o_list.push_back(vs);
+                }
+            });
+            if (neig_it != neigs.end()) break;
+            c_list.push_back(o_list[q_pos]);
+            o_list.erase(o_list.begin() + q_pos);
         }
+        return c_list.back();
     }
-    */
+    
 
 
     //
 
     class AlreadyThereException {};
     int coordX(int posisition) {
-        return posisition;
+        return posisition / width;
     }
 
     int coordY(int posisition) {
-        return posisition;
+        return posisition % width;
     }
 
-    int distEuclidienne(unsigned int position, unsigned int cible) {
+    int distEuclidienne(int position, int cible) {
         return sqrt(pow(coordX(position) - coordX(cible), 2) + pow(coordY(position) - coordY(cible), 2));
     }
 
-    int meilleureDistanceCible(unsigned int cible) {
+    int meilleureDistanceCible(char cible) {
         int distCourante;
         int distRetenue = std::numeric_limits<int>::max();
         int posRetenue = -1;
         //Pour chaque cible C dans carte
-        for (auto i = grille.begin(); i != grille.end(); ++i) {
+        for (auto i = grille->begin(); i != grille->end(); ++i) {
             if (*i == cible) {
-                distCourante = distEuclidienne(position, cible);
+                distCourante = distEuclidienne(position, i - grille->begin());
                 if (distCourante < distRetenue) {
                     distRetenue = distCourante;
-                    posRetenue = position;
+                    posRetenue = i - grille->begin();
                 }
             }
         }

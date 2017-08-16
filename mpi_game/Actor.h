@@ -22,7 +22,7 @@ class BadRoleException {};
 
 class Actor
 {
-    struct update_pack { int pos; char val; };
+    struct update_pack { int posA; int posB; };
 	using action_datatype = int;
     using update_datatype = update_pack;
     using update_metatype = int;
@@ -58,19 +58,19 @@ public:
 
     void initialize()
     {
-        using init_connector = mpi_interface::mpi_slave_connector<char>;
-        auto context = mpi_driver::make_mpi_context(MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, MPI_CHAR);
+        using init_connector = mpi_interface::mpi_slave_connector<int>;
+        auto context = mpi_driver::make_mpi_context(0, 0, MPI_COMM_WORLD, MPI_INT);
         context.count = 1;
         init_connector i_ct; i_ct.request<canal_direction::_receive>(context);
-        char role = *(i_ct.queue.front());
-        switch (role) {
-        case '0':
+        int position = *(i_ct.queue.front());
+        switch (grille[position]) {
+        case 'R':
             std::cout << "ACTR | I am an actor playing a rat !" << std::endl;
-            actor = new Rat();
+            actor = new Rat(&grille, width, height, position);
             break;
-        case '1':
+        case 'C':
             std::cout << "ACTR | I am an actor playing a cat !" << std::endl;
-            actor = new Chasseur();
+            actor = new Chasseur(&grille, width, height, position);
             break;
         default:
             throw BadRoleException{};
@@ -87,14 +87,19 @@ public:
 	}
 
 	void processUpdate(update_datatype* update, int count) {
+        bool pos_flag = false;
         std::for_each(update, update + count - 1, [&](update_datatype& upd) {
-            if(upd.pos < grille.size())
-                grille[upd.pos] = upd.val;
+            if (update->posA == actor->position) actor->position = update->posB;
+            else if (update->posB == actor->position) actor->position = update->posA;
+
+            char tmp = grille[upd.posA];
+            grille[upd.posA] = grille[upd.posB];
+            grille[upd.posB] = tmp;
         });
-        if (update[count - 1].val == 'T') processScream();
+        if (update[count - 1].posA == -1 && update[count - 1].posB == 1) processScream();
     }
 
-    void processScream() {
+    void processScream() const {
         std::cout << "ACTR | fearing !" << std::endl;
         actor->raiseInFear();
     }
